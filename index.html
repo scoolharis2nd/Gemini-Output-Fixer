@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Google AI Studio Output Fixer &amp; Formatter</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-icon" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>AI Studio Output Fixer &amp; Formatter</h1>
+        <p>100% Offline Auto-Heal Markdown, Code, Table &amp; LaTeX Parser</p>
+      </div>
+    </div>
+
+    <div class="header-controls">
+      <label class="font-control" title="Ukuran Font">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
+        </svg>
+        <input type="range" id="fontSizeSlider" min="12" max="21" value="14" aria-label="Font Size">
+        <span id="fontSizeLabel">14px</span>
+      </label>
+
+      <div class="dropdown-wrap">
+        <button class="btn" id="rulesBtn" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/>
+          </svg>
+          Rules
+        </button>
+        <div class="dropdown-menu" id="rulesMenu"></div>
+      </div>
+
+      <div class="dropdown-wrap">
+        <button class="btn" id="historyBtn" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          History (<span id="historyCount">0</span>)
+        </button>
+        <div class="dropdown-menu" id="historyMenu"></div>
+      </div>
+
+      <div class="dropdown-wrap">
+        <button class="btn" id="exportBtn" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Export
+        </button>
+        <div class="dropdown-menu" id="exportMenu">
+          <button class="dropdown-item" type="button" data-export="md">
+            <strong>Download Markdown (.md)</strong>
+            <small>Teks Markdown hasil perbaikan</small>
+          </button>
+          <button class="dropdown-item" type="button" data-export="txt">
+            <strong>Download Plain Text (.txt)</strong>
+            <small>Teks bersih tanpa simbol Markdown</small>
+          </button>
+          <button class="dropdown-item" type="button" data-export="html">
+            <strong>Download Document (.html)</strong>
+            <small>Dokumen HTML mandiri siap cetak</small>
+          </button>
+          <button class="dropdown-item" type="button" data-export="json">
+            <strong>Download Data (.json)</strong>
+            <small>Markdown, daftar kode &amp; heading</small>
+          </button>
+        </div>
+      </div>
+
+      <button class="btn btn-icon" id="themeToggle" type="button" title="Ubah Tema Dark / Light" aria-label="Toggle Theme">
+        <svg id="themeIconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;">
+          <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+        <svg id="themeIconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <section class="diagnostic-bar" aria-label="Diagnostic Report">
+    <div class="diag-badges" id="diagBadges">
+      <span class="diag-title">Fix Log:</span>
+      <span class="badge" id="diagSummaryBadge">Menunggu input</span>
+    </div>
+
+    <div class="stats-bar">
+      <span>Kata: <strong id="statWords">0</strong></span>
+      <span>Karakter: <strong id="statChars">0</strong></span>
+      <span>Baca: <strong id="statRead">0 mnt</strong></span>
+    </div>
+  </section>
+
+  <div class="mobile-tabs">
+    <button class="mobile-tab-btn active" id="mobTabInput" type="button">Input (Raw)</button>
+    <button class="mobile-tab-btn" id="mobTabOutput" type="button">Output (Fixed)</button>
+  </div>
+
+  <main class="workspace">
+    <section class="panel" id="inputPanel">
+      <div class="panel-header">
+        <div class="panel-title">Input (Raw Broken Text)</div>
+        <div class="panel-actions">
+          <button class="btn btn-sm" id="undoBtn" type="button" title="Undo" disabled>Undo</button>
+          <button class="btn btn-sm" id="redoBtn" type="button" title="Redo" disabled>Redo</button>
+          <button class="btn btn-sm" id="pasteBtn" type="button">Paste</button>
+          <button class="btn btn-sm" id="importFileBtn" type="button">Import</button>
+          <input type="file" id="fileInput" accept=".txt,.md,.markdown,.log" hidden>
+          <button class="btn btn-sm" id="findToggleBtn" type="button">Find &amp; Replace</button>
+          <button class="btn btn-sm" id="sampleBtn" type="button">Sample</button>
+          <button class="btn btn-sm" id="clearBtn" type="button">Clear</button>
+        </div>
+      </div>
+
+      <div class="find-bar" id="findBar">
+        <input class="find-input" id="findInput" type="text" placeholder="Cari teks atau regex...">
+        <input class="find-input" id="replaceInput" type="text" placeholder="Ganti dengan...">
+        <button class="toggle-pill" id="regexToggle" type="button" title="Gunakan Regex">.*</button>
+        <button class="toggle-pill" id="caseToggle" type="button" title="Case Sensitive">Aa</button>
+        <span class="find-count" id="findCount">0 cocok</span>
+        <button class="btn btn-sm" id="replaceNextBtn" type="button">Ganti 1</button>
+        <button class="btn btn-sm btn-primary" id="replaceAllBtn" type="button">Semua</button>
+      </div>
+
+      <div class="editor-wrap">
+        <textarea id="rawInput" spellcheck="false" placeholder="Paste atau drag &amp; drop file .md / .txt Google AI Studio di sini..."></textarea>
+      </div>
+    </section>
+
+    <section class="panel mobile-hidden" id="outputPanel">
+      <div class="panel-header">
+        <div class="panel-title">Output (Fixed Result)</div>
+        <div class="panel-actions">
+          <div class="view-switch" role="tablist">
+            <button type="button" id="modePreviewBtn" class="active" role="tab">Rendered Preview</button>
+            <button type="button" id="modeRawBtn" role="tab">Fixed Raw Markdown</button>
+            <button type="button" id="modeDiffBtn" role="tab">Diff</button>
+          </div>
+          <button class="btn btn-sm" id="tocToggleBtn" type="button" title="Daftar Isi (TOC)">TOC</button>
+          <button class="btn btn-sm" id="extractCodeBtn" type="button" title="Ekstrak Semua Blok Kode">Code</button>
+          <button class="btn btn-sm btn-warning" id="continuePromptBtn" type="button">Continue Prompt</button>
+          <button class="btn btn-sm btn-primary" id="copyResultBtn" type="button">Copy Fixed</button>
+        </div>
+      </div>
+
+      <div class="toc-bar" id="tocBar"></div>
+      <div class="output-body md-preview" id="previewOutput"></div>
+      <textarea class="raw-output" id="rawOutput" readonly spellcheck="false"></textarea>
+      <div class="diff-view" id="diffOutput"></div>
+
+      <div class="truncation-banner" id="truncationBanner">
+        <span><strong>Terdeteksi terpotong!</strong> Teks berhenti di tengah kalimat/kode.</span>
+        <button class="btn btn-sm btn-warning" id="bannerContinueBtn" type="button">Generate Continue Prompt</button>
+      </div>
+    </section>
+  </main>
+
+  <nav class="mobile-bottom-bar" aria-label="Mobile Quick Actions">
+    <button class="mob-bar-btn" id="mobBarPaste" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+      <span>Paste</span>
+    </button>
+    <button class="mob-bar-btn active" id="mobBarInput" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      <span>Input</span>
+    </button>
+    <button class="mob-bar-btn" id="mobBarOutput" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <span>Output</span>
+    </button>
+    <button class="mob-bar-btn primary-action" id="mobBarCopy" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      <span>Copy Fixed</span>
+    </button>
+  </nav>
+
+  <div class="modal-backdrop" id="continueModal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <h2 id="modalTitle">Smart Continuation Prompt</h2>
+        <button class="btn btn-sm" id="closeModalBtn" type="button">Tutup</button>
+      </div>
+      <p style="font-size:12.5px; color:var(--text-secondary);">
+        Salin prompt di bawah ini dan paste kembali ke Google AI Studio untuk melanjutkan generasi teks tepat dari bagian terakhir:
+      </p>
+      <textarea id="continuePromptText" readonly></textarea>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="copyContinueBtn" type="button">Copy Prompt</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="codeExtractModal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="codeModalTitle">
+      <div class="modal-header">
+        <h2 id="codeModalTitle">Extracted Code Blocks</h2>
+        <button class="btn btn-sm" id="closeCodeModalBtn" type="button">Tutup</button>
+      </div>
+      <div id="codeExtractBody" style="display:flex;flex-direction:column;gap:10px;"></div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <script src="js/parser.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -6,6 +6,7 @@
   const STORAGE_THEME = 'aistudio_fixer_theme_v2';
   const STORAGE_FONT = 'aistudio_fixer_font_v2';
   const STORAGE_RULES = 'aistudio_fixer_rules_v2';
+  const STORAGE_READER = 'aistudio_fixer_reader_v1';
 
   const SAMPLE_TEXT = `#Laporan Analisis Performa API\u200B\u200C
 Berikut adalah ringkasan hasil uji coba sistem yang mengalami â€œbottleneckâ€ pada jam sibuk.
@@ -64,6 +65,7 @@ async function cacheMiddleware(req, res, next) {
   const clearBtn = document.getElementById('clearBtn');
   const sampleBtn = document.getElementById('sampleBtn');
   const copyResultBtn = document.getElementById('copyResultBtn');
+  const copyPlainBtn = document.getElementById('copyPlainBtn');
   const continuePromptBtn = document.getElementById('continuePromptBtn');
   const bannerContinueBtn = document.getElementById('bannerContinueBtn');
   const undoBtn = document.getElementById('undoBtn');
@@ -72,6 +74,8 @@ async function cacheMiddleware(req, res, next) {
   const fileInput = document.getElementById('fileInput');
   const extractCodeBtn = document.getElementById('extractCodeBtn');
   const tocToggleBtn = document.getElementById('tocToggleBtn');
+  const readerModeBtn = document.getElementById('readerModeBtn');
+  const openWindowBtn = document.getElementById('openWindowBtn');
 
   const findToggleBtn = document.getElementById('findToggleBtn');
   const findBar = document.getElementById('findBar');
@@ -100,11 +104,28 @@ async function cacheMiddleware(req, res, next) {
   const codeExtractBody = document.getElementById('codeExtractBody');
   const closeCodeModalBtn = document.getElementById('closeCodeModalBtn');
 
+  // Reader Mode Elements
+  const readerOverlay = document.getElementById('readerOverlay');
+  const readerProgressFill = document.getElementById('readerProgressFill');
+  const closeReaderBtn = document.getElementById('closeReaderBtn');
+  const readerThemeSelect = document.getElementById('readerThemeSelect');
+  const readerFontSelect = document.getElementById('readerFontSelect');
+  const readerWidthSelect = document.getElementById('readerWidthSelect');
+  const readerFontDecBtn = document.getElementById('readerFontDecBtn');
+  const readerFontIncBtn = document.getElementById('readerFontIncBtn');
+  const readerJustifyBtn = document.getElementById('readerJustifyBtn');
+  const readerAutoScrollSelect = document.getElementById('readerAutoScrollSelect');
+  const readerPopoutBtn = document.getElementById('readerPopoutBtn');
+  const readerScroll = document.getElementById('readerScroll');
+  const readerArticle = document.getElementById('readerArticle');
+  const readerTopBtn = document.getElementById('readerTopBtn');
+
   const mobTabInput = document.getElementById('mobTabInput');
   const mobTabOutput = document.getElementById('mobTabOutput');
   const mobBarPaste = document.getElementById('mobBarPaste');
   const mobBarInput = document.getElementById('mobBarInput');
   const mobBarOutput = document.getElementById('mobBarOutput');
+  const mobBarReader = document.getElementById('mobBarReader');
   const mobBarCopy = document.getElementById('mobBarCopy');
 
   const inputPanel = document.getElementById('inputPanel');
@@ -123,7 +144,15 @@ async function cacheMiddleware(req, res, next) {
     history: [],
     undoStack: [],
     redoStack: [],
-    rules: Object.assign({}, global.FixerParser.DEFAULT_RULES)
+    rules: Object.assign({}, global.FixerParser.DEFAULT_RULES),
+    reader: {
+      theme: 'dark',
+      font: 'serif',
+      width: 'medium',
+      size: 18,
+      justify: false,
+      scrollPos: 0
+    }
   };
 
   function storageGet(key, fallback) {
@@ -151,7 +180,7 @@ async function cacheMiddleware(req, res, next) {
       toast.style.transform = 'translateY(8px)';
       toast.style.transition = 'all 0.2s ease';
       setTimeout(() => toast.remove(), 220);
-    }, 2400);
+    }, 2200);
   }
 
   async function copyText(text, successMsg) {
@@ -204,18 +233,12 @@ async function cacheMiddleware(req, res, next) {
     if (stats.sanitized > 0) items.push({ label: `${stats.sanitized} Sanitasi`, cls: 'active-fix' });
     if (stats.truncated) items.push({ label: 'Terpotong', cls: 'warn-fix' });
 
-    diagBadges.innerHTML = `
-      <span class="diag-title">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-        </svg>
-        Fix Log:
-      </span>
-    `;
+    diagBadges.innerHTML = `<span class="diag-title">Fix Log:</span>`;
 
     if (items.length === 0) {
       const b = document.createElement('span');
       b.className = 'badge';
+      b.id = 'diagSummaryBadge';
       b.textContent = rawInput.value.trim() ? 'Format bersih (0 perbaikan)' : 'Menunggu input';
       diagBadges.appendChild(b);
     } else {
@@ -249,7 +272,19 @@ async function cacheMiddleware(req, res, next) {
     ).join('');
   }
 
+  let processTimer = null;
   let saveTimer = null;
+
+  function scheduleProcessInput(skipUndo) {
+    const len = rawInput.value.length;
+    if (len < 3000) {
+      processInput(skipUndo);
+    } else {
+      clearTimeout(processTimer);
+      processTimer = setTimeout(() => processInput(skipUndo), 90);
+    }
+  }
+
   function processInput(skipUndo) {
     const inputVal = rawInput.value;
     if (!skipUndo) pushUndo(inputVal);
@@ -264,6 +299,9 @@ async function cacheMiddleware(req, res, next) {
     previewOutput.innerHTML = global.FixerRenderer.renderMarkdownToHtml(fixed);
     if (state.viewMode === 'diff') {
       diffOutput.innerHTML = global.FixerRenderer.renderDiffHtml(global.FixerParser.computeLineDiff(inputVal, fixed));
+    }
+    if (readerOverlay.classList.contains('open')) {
+      readerArticle.innerHTML = previewOutput.innerHTML;
     }
 
     renderDiagnostics(stats);
@@ -346,7 +384,8 @@ async function cacheMiddleware(req, res, next) {
       ['tables', 'Perbaiki Tabel Markdown'],
       ['listsHeadings', 'Fix List & Heading'],
       ['math', 'Bersihkan LaTeX / Math'],
-      ['inlineTags', 'Tutup Tag Inline (` ** _)']
+      ['inlineTags', 'Tutup Tag Inline (` ** _)'],
+      ['storyDialogue', 'Rapikan Paragraf Dialog Cerita']
     ];
     rulesMenu.innerHTML = labels.map(([key, label]) => `
       <label class="rule-toggle">
@@ -356,6 +395,100 @@ async function cacheMiddleware(req, res, next) {
     `).join('');
   }
 
+  // =========================================================
+  // STORY / FANFICTION READER MODE & POP-OUT WINDOW
+  // =========================================================
+  let autoScrollTimer = null;
+
+  function applyReaderPrefs() {
+    const r = state.reader;
+    readerOverlay.setAttribute('data-rtheme', r.theme);
+    readerThemeSelect.value = r.theme;
+    readerFontSelect.value = r.font;
+    readerWidthSelect.value = r.width;
+    readerArticle.className = `reader-article font-${r.font} width-${r.width} md-preview` + (r.justify ? ' align-justify' : '');
+    readerArticle.style.fontSize = r.size + 'px';
+    readerJustifyBtn.classList.toggle('active', r.justify);
+    storageSet(STORAGE_READER, JSON.stringify(r));
+  }
+
+  function openReaderMode() {
+    if (!state.fixedMarkdown.trim()) {
+      showToast('Belum ada output untuk dibaca.', 'warning');
+      return;
+    }
+    readerArticle.innerHTML = previewOutput.innerHTML;
+    applyReaderPrefs();
+    readerOverlay.classList.add('open');
+    readerOverlay.classList.remove('bars-hidden');
+    readerScroll.scrollTop = state.reader.scrollPos || 0;
+    updateReaderProgress();
+  }
+
+  function closeReaderMode() {
+    stopAutoScroll();
+    readerAutoScrollSelect.value = '0';
+    readerOverlay.classList.remove('open');
+  }
+
+  function updateReaderProgress() {
+    const max = readerScroll.scrollHeight - readerScroll.clientHeight;
+    const pct = max > 0 ? Math.min(100, Math.round((readerScroll.scrollTop / max) * 100)) : 0;
+    readerProgressFill.style.width = pct + '%';
+    state.reader.scrollPos = readerScroll.scrollTop;
+    storageSet(STORAGE_READER, JSON.stringify(state.reader));
+  }
+
+  function stopAutoScroll() {
+    if (autoScrollTimer) {
+      clearInterval(autoScrollTimer);
+      autoScrollTimer = null;
+    }
+  }
+
+  function startAutoScroll(speed) {
+    stopAutoScroll();
+    if (!speed || speed <= 0) return;
+    autoScrollTimer = setInterval(() => {
+      readerScroll.scrollTop += speed;
+      if (readerScroll.scrollTop + readerScroll.clientHeight >= readerScroll.scrollHeight - 2) {
+        stopAutoScroll();
+        readerAutoScrollSelect.value = '0';
+      }
+    }, 45);
+  }
+
+  function buildStandaloneHtml() {
+    const r = state.reader;
+    const bgMap = { dark: '#111622', amoled: '#000000', sepia: '#f4ecd8', light: '#ffffff' };
+    const fgMap = { dark: '#dde5f0', amoled: '#d4d4d8', sepia: '#3e2f20', light: '#1e293b' };
+    const fontCss = r.font === 'serif' ? 'Georgia, "Times New Roman", serif' : r.font === 'mono' ? 'ui-monospace, monospace' : 'system-ui, -apple-system, sans-serif';
+    const maxW = r.width === 'narrow' ? '54ch' : r.width === 'wide' ? '88ch' : '68ch';
+    return `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Story Reader — Fixed Output</title><style>body{margin:0;padding:28px 20px 64px;background:${bgMap[r.theme] || '#111622'};color:${fgMap[r.theme] || '#dde5f0'};font-family:${fontCss};font-size:${r.size}px;line-height:1.8;}main{max-width:${maxW};margin:0 auto;}p{margin:0 0 1.15em;${r.justify ? 'text-align:justify;' : ''}}pre{background:rgba(128,128,128,0.12);padding:14px;border-radius:8px;overflow-x:auto;}table{border-collapse:collapse;width:100%;margin:16px 0;}th,td{border:1px solid rgba(128,128,128,0.3);padding:8px 12px;text-align:left;}blockquote{border-left:3px solid #3b82f6;margin:14px 0;padding:8px 14px;background:rgba(59,130,246,0.08);}</style></head><body><main>${previewOutput.innerHTML}</main></body></html>`;
+  }
+
+  function openStandaloneWindow() {
+    if (!state.fixedMarkdown.trim()) {
+      showToast('Belum ada output untuk dibuka.', 'warning');
+      return;
+    }
+    try {
+      const blob = new Blob([buildStandaloneHtml()], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const win = window.open(url, '_blank');
+      if (!win) {
+        URL.revokeObjectURL(url);
+        openReaderMode();
+        showToast('Popup diblokir browser. Dibuka di Reader View layar penuh.', 'info');
+      }
+    } catch (e) {
+      openReaderMode();
+    }
+  }
+
+  // =========================================================
+  // FIND & REPLACE, MODALS, EXPORTS
+  // =========================================================
   function buildFindRegex(globalFlag) {
     const query = findInput.value;
     if (!query) return null;
@@ -448,12 +581,12 @@ async function cacheMiddleware(req, res, next) {
         const clip = await navigator.clipboard.readText();
         if (clip) {
           rawInput.value = clip;
-          processInput();
+          processInput(false);
           showToast('Teks berhasil di-paste dari clipboard!', 'success');
           return;
         }
       }
-      showToast('Gunakan tempel/paste langsung di area input.', 'info');
+      showToast('Tempel langsung di area input.', 'info');
       switchMobilePanel('input');
       rawInput.focus();
     } catch (e) {
@@ -464,11 +597,28 @@ async function cacheMiddleware(req, res, next) {
   }
 
   // Event Listeners
-  rawInput.addEventListener('input', () => processInput(false));
+  rawInput.addEventListener('input', () => scheduleProcessInput(false));
 
   modePreviewBtn.addEventListener('click', () => setViewMode('preview'));
   modeRawBtn.addEventListener('click', () => setViewMode('raw'));
   modeDiffBtn.addEventListener('click', () => setViewMode('diff'));
+
+  readerModeBtn.addEventListener('click', openReaderMode);
+  mobBarReader.addEventListener('click', openReaderMode);
+  openWindowBtn.addEventListener('click', openStandaloneWindow);
+  readerPopoutBtn.addEventListener('click', openStandaloneWindow);
+  closeReaderBtn.addEventListener('click', closeReaderMode);
+
+  readerThemeSelect.addEventListener('change', (e) => { state.reader.theme = e.target.value; applyReaderPrefs(); });
+  readerFontSelect.addEventListener('change', (e) => { state.reader.font = e.target.value; applyReaderPrefs(); });
+  readerWidthSelect.addEventListener('change', (e) => { state.reader.width = e.target.value; applyReaderPrefs(); });
+  readerFontDecBtn.addEventListener('click', () => { state.reader.size = Math.max(13, state.reader.size - 1); applyReaderPrefs(); });
+  readerFontIncBtn.addEventListener('click', () => { state.reader.size = Math.min(26, state.reader.size + 1); applyReaderPrefs(); });
+  readerJustifyBtn.addEventListener('click', () => { state.reader.justify = !state.reader.justify; applyReaderPrefs(); });
+  readerAutoScrollSelect.addEventListener('change', (e) => startAutoScroll(Number(e.target.value)));
+  readerScroll.addEventListener('scroll', updateReaderProgress, { passive: true });
+  readerArticle.addEventListener('click', () => readerOverlay.classList.toggle('bars-hidden'));
+  readerTopBtn.addEventListener('click', () => readerScroll.scrollTo({ top: 0, behavior: 'smooth' }));
 
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
@@ -504,11 +654,11 @@ async function cacheMiddleware(req, res, next) {
   });
   copyResultBtn.addEventListener('click', () => copyText(state.fixedMarkdown, 'Fixed Markdown berhasil disalin!'));
   mobBarCopy.addEventListener('click', () => copyText(state.fixedMarkdown, 'Fixed Markdown berhasil disalin!'));
+  copyPlainBtn.addEventListener('click', () => copyText(stripMarkdownToPlain(state.fixedMarkdown), 'Teks polos berhasil disalin!'));
 
   undoBtn.addEventListener('click', () => {
     if (state.undoStack.length <= 1) return;
-    const current = state.undoStack.pop();
-    state.redoStack.push(current);
+    state.redoStack.push(state.undoStack.pop());
     rawInput.value = state.undoStack[state.undoStack.length - 1];
     updateUndoRedoBtns();
     processInput(true);
@@ -537,7 +687,6 @@ async function cacheMiddleware(req, res, next) {
     fileInput.value = '';
   });
 
-  // Drag & Drop File Import
   inputPanel.addEventListener('dragover', (e) => {
     e.preventDefault();
     inputPanel.classList.add('drag-over');
@@ -635,7 +784,6 @@ async function cacheMiddleware(req, res, next) {
     showToast(`${matches.length} kecocokan diganti.`, 'success');
   });
 
-  // Dropdowns
   function closeAllDropdowns() {
     rulesMenu.classList.remove('open');
     historyMenu.classList.remove('open');
@@ -696,8 +844,7 @@ async function cacheMiddleware(req, res, next) {
     } else if (type === 'json') {
       downloadFile('fixed-output.json', JSON.stringify({ fixedMarkdown: state.fixedMarkdown, codeBlocks: state.codeBlocks, headings: state.headings }, null, 2), 'application/json');
     } else if (type === 'html') {
-      const docHtml = `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Fixed Output</title><style>body{font-family:system-ui,sans-serif;max-width:820px;margin:40px auto;padding:0 20px;line-height:1.7;color:#1e293b;}pre{background:#0f172a;color:#f8fafc;padding:14px;border-radius:8px;overflow-x:auto;}table{border-collapse:collapse;width:100%;margin:16px 0;}th,td{border:1px solid #cbd5e1;padding:8px 12px;text-align:left;}th{background:#f1f5f9;}blockquote{border-left:4px solid #3b82f6;margin:12px 0;padding:8px 14px;background:#eff6ff;}</style></head><body>${previewOutput.innerHTML}</body></html>`;
-      downloadFile('fixed-output.html', docHtml, 'text/html');
+      downloadFile('fixed-output.html', buildStandaloneHtml(), 'text/html');
     }
   });
 
@@ -714,7 +861,6 @@ async function cacheMiddleware(req, res, next) {
   mobBarInput.addEventListener('click', () => switchMobilePanel('input'));
   mobBarOutput.addEventListener('click', () => switchMobilePanel('output'));
 
-  // Keyboard Shortcuts
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
       e.preventDefault();
@@ -723,6 +869,7 @@ async function cacheMiddleware(req, res, next) {
       closeAllDropdowns();
       continueModal.classList.remove('open');
       codeExtractModal.classList.remove('open');
+      if (readerOverlay.classList.contains('open')) closeReaderMode();
     }
   });
 
@@ -730,6 +877,8 @@ async function cacheMiddleware(req, res, next) {
   try {
     const savedRules = JSON.parse(storageGet(STORAGE_RULES, 'null'));
     if (savedRules) state.rules = Object.assign({}, state.rules, savedRules);
+    const savedReader = JSON.parse(storageGet(STORAGE_READER, 'null'));
+    if (savedReader) state.reader = Object.assign({}, state.reader, savedReader);
   } catch (e) {}
 
   renderRulesMenu();

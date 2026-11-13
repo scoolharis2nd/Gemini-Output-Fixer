@@ -7,7 +7,8 @@
     tables: true,
     listsHeadings: true,
     math: true,
-    inlineTags: true
+    inlineTags: true,
+    storyDialogue: false
   };
 
   function isTableLine(line) {
@@ -146,6 +147,26 @@
     return out;
   }
 
+  function formatStoryParagraphs(lines, stats) {
+    // Ensure dialogue lines starting with quotes or em-dash have clean paragraph spacing
+    const out = [];
+    for (let i = 0; i < lines.length; i++) {
+      const cur = lines[i];
+      const prev = out[out.length - 1];
+      if (
+        prev && prev.trim() !== '' &&
+        cur.trim() !== '' &&
+        !/^(#{1,6}\s|>|\s*[-*+]\s+|\s*\d+\.\s+|\|)/.test(cur) &&
+        (/^[""'—]/.test(cur.trim()) || /[""]$/.test(prev.trim()))
+      ) {
+        out.push('');
+        stats.sanitized++;
+      }
+      out.push(cur);
+    }
+    return out;
+  }
+
   function repairMath(text, stats) {
     let out = text;
 
@@ -227,7 +248,6 @@
 
     let text = raw.replace(/\r\n?/g, '\n');
 
-    // 1. Character & Whitespace Sanitizer
     if (rules.sanitize) {
       const invisibleMatches = text.match(/[\u200B-\u200D\uFEFF\u2060\u00AD]/g);
       if (invisibleMatches) {
@@ -261,7 +281,6 @@
       }
     }
 
-    // 2. Auto-Close Unclosed Code Blocks
     let lines = text.split('\n');
     let inCode = false;
     let fenceChar = '```';
@@ -300,7 +319,6 @@
       stats.truncated = true;
     }
 
-    // Split into code & text segments
     lines = repairedLines;
     const segments = [];
     let buf = [];
@@ -336,6 +354,7 @@
 
       if (rules.tables) seg.lines = repairTables(seg.lines, stats);
       if (rules.listsHeadings) seg.lines = repairListsAndHeadings(seg.lines, stats);
+      if (rules.storyDialogue) seg.lines = formatStoryParagraphs(seg.lines, stats);
 
       let segText = seg.lines.join('\n');
       if (rules.math) segText = repairMath(segText, stats);

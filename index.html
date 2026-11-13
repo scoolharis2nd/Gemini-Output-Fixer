@@ -17,7 +17,7 @@
       </div>
       <div class="brand-text">
         <h1>AI Studio Output Fixer &amp; Formatter</h1>
-        <p>100% Offline Auto-Heal Markdown, Code, Table &amp; LaTeX Parser</p>
+        <p>100% Offline Auto-Heal Markdown, Code, Table &amp; Story Reader</p>
       </div>
     </div>
 
@@ -26,7 +26,7 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
         </svg>
-        <input type="range" id="fontSizeSlider" min="12" max="21" value="14" aria-label="Font Size">
+        <input type="range" id="fontSizeSlider" min="12" max="22" value="14" aria-label="Font Size">
         <span id="fontSizeLabel">14px</span>
       </label>
 
@@ -146,9 +146,12 @@
             <button type="button" id="modeRawBtn" role="tab">Fixed Raw Markdown</button>
             <button type="button" id="modeDiffBtn" role="tab">Diff</button>
           </div>
+          <button class="btn btn-sm btn-primary" id="readerModeBtn" type="button" title="Buka Mode Baca Cerita/Fanfiksi Layar Penuh">Reader View</button>
+          <button class="btn btn-sm" id="openWindowBtn" type="button" title="Buka Output di Jendela Browser Baru">New Window</button>
           <button class="btn btn-sm" id="tocToggleBtn" type="button" title="Daftar Isi (TOC)">TOC</button>
           <button class="btn btn-sm" id="extractCodeBtn" type="button" title="Ekstrak Semua Blok Kode">Code</button>
           <button class="btn btn-sm btn-warning" id="continuePromptBtn" type="button">Continue Prompt</button>
+          <button class="btn btn-sm" id="copyPlainBtn" type="button" title="Salin Teks Polos Tanpa Markdown">Copy Text</button>
           <button class="btn btn-sm btn-primary" id="copyResultBtn" type="button">Copy Fixed</button>
         </div>
       </div>
@@ -178,11 +181,57 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
       <span>Output</span>
     </button>
+    <button class="mob-bar-btn" id="mobBarReader" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      <span>Baca</span>
+    </button>
     <button class="mob-bar-btn primary-action" id="mobBarCopy" type="button">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-      <span>Copy Fixed</span>
+      <span>Copy</span>
     </button>
   </nav>
+
+  <!-- Full-Screen Story / Fanfiction Reader Overlay (WebView) -->
+  <div class="reader-overlay" id="readerOverlay" data-rtheme="dark" role="dialog" aria-modal="true" aria-label="Story Reader Mode">
+    <div class="reader-progress-track">
+      <div class="reader-progress-fill" id="readerProgressFill"></div>
+    </div>
+    <div class="reader-topbar" id="readerTopbar">
+      <button class="reader-btn" id="closeReaderBtn" type="button">&larr; Kembali</button>
+      <div class="reader-controls">
+        <select class="reader-select" id="readerThemeSelect" aria-label="Tema Baca">
+          <option value="dark">Tema: Dark</option>
+          <option value="sepia">Tema: Sepia (Novel)</option>
+          <option value="amoled">Tema: AMOLED</option>
+          <option value="light">Tema: Light</option>
+        </select>
+        <select class="reader-select" id="readerFontSelect" aria-label="Jenis Font">
+          <option value="serif">Font: Serif (Cerita)</option>
+          <option value="sans">Font: Sans-Serif</option>
+          <option value="mono">Font: Monospace</option>
+        </select>
+        <select class="reader-select" id="readerWidthSelect" aria-label="Lebar Kolom">
+          <option value="narrow">Lebar: Sempit</option>
+          <option value="medium" selected>Lebar: Nyaman</option>
+          <option value="wide">Lebar: Penuh</option>
+        </select>
+        <button class="reader-btn" id="readerFontDecBtn" type="button" title="Perkecil Font">A-</button>
+        <button class="reader-btn" id="readerFontIncBtn" type="button" title="Perbesar Font">A+</button>
+        <button class="reader-btn" id="readerJustifyBtn" type="button" title="Rata Kanan-Kiri">Justify</button>
+        <select class="reader-select" id="readerAutoScrollSelect" aria-label="Auto Scroll">
+          <option value="0">Auto-Scroll: Off</option>
+          <option value="1">Scroll: Lambat</option>
+          <option value="2">Scroll: Sedang</option>
+          <option value="4">Scroll: Cepat</option>
+        </select>
+        <button class="reader-btn" id="readerPopoutBtn" type="button" title="Buka di Tab/Jendela Baru">Pop-out</button>
+      </div>
+    </div>
+    <div class="reader-scroll" id="readerScroll">
+      <article class="reader-article font-serif width-medium md-preview" id="readerArticle"></article>
+    </div>
+    <button class="reader-fab-top" id="readerTopBtn" type="button" title="Ke Atas">&uarr;</button>
+  </div>
 
   <div class="modal-backdrop" id="continueModal">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">

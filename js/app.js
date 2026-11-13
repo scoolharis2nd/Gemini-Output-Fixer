@@ -3,42 +3,28 @@
 
   const STORAGE_DRAFT = 'aistudio_fixer_draft_v2';
   const STORAGE_HISTORY = 'aistudio_fixer_history_v2';
-  const STORAGE_THEME = 'aistudio_fixer_theme_v2';
+  const STORAGE_THEME = 'aistudio_fixer_theme_v3';
   const STORAGE_FONT = 'aistudio_fixer_font_v2';
   const STORAGE_RULES = 'aistudio_fixer_rules_v2';
-  const STORAGE_READER = 'aistudio_fixer_reader_v1';
+  const STORAGE_READER = 'aistudio_fixer_reader_v2';
 
-  const SAMPLE_TEXT = `#Laporan Analisis Performa API\u200B\u200C
-Berikut adalah ringkasan hasil uji coba sistem yang mengalami â€œbottleneckâ€ pada jam sibuk.
+  const SAMPLE_TEXT = `#Bab 1: Senja di Stasiun Lama\u200B\u200C
+Angin sore berhembus pelan melewati peron yang hampir kosong. Raka menatap jam saku miliknya yang jarumnya berhenti tepat pada pukul lima lewat sepuluh.
 
 
 
--Peningkatan latensi sebesar **42% pada endpoint \`/v1/generate
--Penggunaan memori melonjak hingga __92% sebelum restart
+"Kau masih menunggu kereta yang sama?" suara itu terdengar dari balik bayangan pilar batu.
+Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Matanya menyimpan rahasia yang belum sempat terucap selama tiga tahun terakhir.
 
-1.Lakukan optimasi query database
-3.Aktifkan caching Redis untuk respons statis
-7.Tambahkan rate limiter per pengguna
+---
 
-###Tabel Perbandingan Metrik
-| Metrik | Sebelum | Sesudah
+###Catatan Penulis &amp; Referensi
+-Latar tempat terinspirasi dari stasiun tua bergaya kolonial
+-Gunakan \`Book Reader\` di atas untuk membaca dengan tema kertas novel
+
+| Bab | Judul | Status
 |---|---|
-| Rata-rata Latensi | 840 ms | 210 ms
-| Error Rate | 4.8% | 0.2% |
-
-Rumus perhitungan efisiensi cache:
-\\[ E = \\frac{H_{hit}}{H_{hit} + M_{miss}} \\times 100\\%
-
-Contoh implementasi middleware caching di JavaScript:
-\`\`\`javascript
-async function cacheMiddleware(req, res, next) {
-  // Cek apakah key tersedia di Redis
-  const key = \`cache:\${req.originalUrl}\`;
-  const cached = await redis.get(key);
-  if (cached) {
-    return res.status(200).json(JSON.parse(cached));
-  }
-  next();`;
+| Bab 1 | Senja di Stasiun Lama | Selesai`;
 
   const rawInput = document.getElementById('rawInput');
   const previewOutput = document.getElementById('previewOutput');
@@ -56,8 +42,7 @@ async function cacheMiddleware(req, res, next) {
   const modeDiffBtn = document.getElementById('modeDiffBtn');
 
   const themeToggle = document.getElementById('themeToggle');
-  const themeIconSun = document.getElementById('themeIconSun');
-  const themeIconMoon = document.getElementById('themeIconMoon');
+  const themeLabel = document.getElementById('themeLabel');
   const fontSizeSlider = document.getElementById('fontSizeSlider');
   const fontSizeLabel = document.getElementById('fontSizeLabel');
 
@@ -104,20 +89,34 @@ async function cacheMiddleware(req, res, next) {
   const codeExtractBody = document.getElementById('codeExtractBody');
   const closeCodeModalBtn = document.getElementById('closeCodeModalBtn');
 
-  // Reader Mode Elements
+  // Reader View Elements
   const readerOverlay = document.getElementById('readerOverlay');
   const readerProgressFill = document.getElementById('readerProgressFill');
+  const readerShowBarsBtn = document.getElementById('readerShowBarsBtn');
   const closeReaderBtn = document.getElementById('closeReaderBtn');
+  const readerChapterTitle = document.getElementById('readerChapterTitle');
+  const readerSettingsToggleBtn = document.getElementById('readerSettingsToggleBtn');
+  const readerHideBarsBtn = document.getElementById('readerHideBarsBtn');
+  const readerSettingsDrawer = document.getElementById('readerSettingsDrawer');
   const readerThemeSelect = document.getElementById('readerThemeSelect');
   const readerFontSelect = document.getElementById('readerFontSelect');
   const readerWidthSelect = document.getElementById('readerWidthSelect');
   const readerFontDecBtn = document.getElementById('readerFontDecBtn');
   const readerFontIncBtn = document.getElementById('readerFontIncBtn');
+  const readerFontSizeLabel = document.getElementById('readerFontSizeLabel');
+  const readerLineHeightSelect = document.getElementById('readerLineHeightSelect');
   const readerJustifyBtn = document.getElementById('readerJustifyBtn');
+  const readerIndentBtn = document.getElementById('readerIndentBtn');
+  const readerDropCapBtn = document.getElementById('readerDropCapBtn');
   const readerAutoScrollSelect = document.getElementById('readerAutoScrollSelect');
   const readerPopoutBtn = document.getElementById('readerPopoutBtn');
   const readerScroll = document.getElementById('readerScroll');
+  const readerPage = document.getElementById('readerPage');
   const readerArticle = document.getElementById('readerArticle');
+  const readerPrevChapBtn = document.getElementById('readerPrevChapBtn');
+  const readerNextChapBtn = document.getElementById('readerNextChapBtn');
+  const readerStatusText = document.getElementById('readerStatusText');
+  const readerTtsBtn = document.getElementById('readerTtsBtn');
   const readerTopBtn = document.getElementById('readerTopBtn');
 
   const mobTabInput = document.getElementById('mobTabInput');
@@ -133,8 +132,10 @@ async function cacheMiddleware(req, res, next) {
   const toastContainer = document.getElementById('toastContainer');
 
   const state = {
+    theme: 'dark',
     viewMode: 'preview',
     fixedMarkdown: '',
+    totalWords: 0,
     isTruncated: false,
     useRegex: false,
     caseSensitive: false,
@@ -146,11 +147,14 @@ async function cacheMiddleware(req, res, next) {
     redoStack: [],
     rules: Object.assign({}, global.FixerParser.DEFAULT_RULES),
     reader: {
-      theme: 'dark',
+      theme: 'sepia',
       font: 'serif',
       width: 'medium',
       size: 18,
-      justify: false,
+      lineHeight: '1.85',
+      justify: true,
+      indent: false,
+      dropCap: true,
       scrollPos: 0
     }
   };
@@ -254,6 +258,7 @@ async function cacheMiddleware(req, res, next) {
   function updateStats(text) {
     const trimmed = text.trim();
     const words = trimmed ? trimmed.split(/\s+/).length : 0;
+    state.totalWords = words;
     const chars = text.length;
     const mins = Math.max(1, Math.ceil(words / 200));
     statWords.textContent = words.toLocaleString('id-ID');
@@ -277,11 +282,11 @@ async function cacheMiddleware(req, res, next) {
 
   function scheduleProcessInput(skipUndo) {
     const len = rawInput.value.length;
-    if (len < 3000) {
+    if (len < 3500) {
       processInput(skipUndo);
     } else {
       clearTimeout(processTimer);
-      processTimer = setTimeout(() => processInput(skipUndo), 90);
+      processTimer = setTimeout(() => processInput(skipUndo), 95);
     }
   }
 
@@ -296,12 +301,12 @@ async function cacheMiddleware(req, res, next) {
     state.headings = headings;
 
     rawOutput.value = fixed;
-    previewOutput.innerHTML = global.FixerRenderer.renderMarkdownToHtml(fixed);
+    previewOutput.innerHTML = global.FixerRenderer.renderMarkdownToHtml(fixed, { bookOrnament: state.theme === 'book' });
     if (state.viewMode === 'diff') {
       diffOutput.innerHTML = global.FixerRenderer.renderDiffHtml(global.FixerParser.computeLineDiff(inputVal, fixed));
     }
     if (readerOverlay.classList.contains('open')) {
-      readerArticle.innerHTML = previewOutput.innerHTML;
+      renderReaderContent();
     }
 
     renderDiagnostics(stats);
@@ -396,9 +401,18 @@ async function cacheMiddleware(req, res, next) {
   }
 
   // =========================================================
-  // STORY / FANFICTION READER MODE & POP-OUT WINDOW
+  // BOOK / FANFICTION READER VIEW + HIDEABLE SETTINGS
   // =========================================================
   let autoScrollTimer = null;
+  let currentChapterIdx = 0;
+
+  function renderReaderContent() {
+    readerArticle.innerHTML = global.FixerRenderer.renderMarkdownToHtml(state.fixedMarkdown, {
+      bookOrnament: true,
+      idPrefix: 'reader-h-'
+    });
+    readerChapterTitle.textContent = state.headings.length ? state.headings[0].text : 'Mode Buku & Fanfiksi';
+  }
 
   function applyReaderPrefs() {
     const r = state.reader;
@@ -406,9 +420,20 @@ async function cacheMiddleware(req, res, next) {
     readerThemeSelect.value = r.theme;
     readerFontSelect.value = r.font;
     readerWidthSelect.value = r.width;
-    readerArticle.className = `reader-article font-${r.font} width-${r.width} md-preview` + (r.justify ? ' align-justify' : '');
+    readerLineHeightSelect.value = r.lineHeight;
+    readerFontSizeLabel.textContent = r.size + 'px';
+
+    readerPage.className = `reader-page width-${r.width}`;
+    readerArticle.className = `reader-article font-${r.font} md-preview` +
+      (r.justify ? ' align-justify' : '') +
+      (r.indent ? ' book-indent' : '') +
+      (r.dropCap ? ' drop-cap' : '');
     readerArticle.style.fontSize = r.size + 'px';
+    readerArticle.style.lineHeight = r.lineHeight;
+
     readerJustifyBtn.classList.toggle('active', r.justify);
+    readerIndentBtn.classList.toggle('active', r.indent);
+    readerDropCapBtn.classList.toggle('active', r.dropCap);
     storageSet(STORAGE_READER, JSON.stringify(r));
   }
 
@@ -417,24 +442,40 @@ async function cacheMiddleware(req, res, next) {
       showToast('Belum ada output untuk dibaca.', 'warning');
       return;
     }
-    readerArticle.innerHTML = previewOutput.innerHTML;
+    renderReaderContent();
     applyReaderPrefs();
-    readerOverlay.classList.add('open');
+    readerSettingsDrawer.classList.remove('open');
+    readerSettingsToggleBtn.classList.remove('active');
     readerOverlay.classList.remove('bars-hidden');
+    readerOverlay.classList.add('open');
     readerScroll.scrollTop = state.reader.scrollPos || 0;
     updateReaderProgress();
   }
 
+  function stopTts() {
+    try {
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    } catch (e) {}
+    readerTtsBtn.classList.remove('active');
+    readerTtsBtn.textContent = 'Bacakan';
+  }
+
   function closeReaderMode() {
     stopAutoScroll();
+    stopTts();
     readerAutoScrollSelect.value = '0';
     readerOverlay.classList.remove('open');
   }
 
   function updateReaderProgress() {
     const max = readerScroll.scrollHeight - readerScroll.clientHeight;
-    const pct = max > 0 ? Math.min(100, Math.round((readerScroll.scrollTop / max) * 100)) : 0;
+    const pct = max > 0 ? Math.min(100, Math.round((readerScroll.scrollTop / max) * 100)) : 100;
     readerProgressFill.style.width = pct + '%';
+
+    const totalMins = Math.max(1, Math.ceil(state.totalWords / 200));
+    const remMins = Math.max(0, Math.round(totalMins * (1 - pct / 100)));
+    readerStatusText.textContent = `${pct}% \u2022 ~${remMins} mnt tersisa`;
+
     state.reader.scrollPos = readerScroll.scrollTop;
     storageSet(STORAGE_READER, JSON.stringify(state.reader));
   }
@@ -458,13 +499,24 @@ async function cacheMiddleware(req, res, next) {
     }, 45);
   }
 
+  function jumpChapter(delta) {
+    if (!state.headings.length) return;
+    currentChapterIdx = Math.max(0, Math.min(state.headings.length - 1, currentChapterIdx + delta));
+    const el = document.getElementById('reader-h-' + currentChapterIdx);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      readerChapterTitle.textContent = state.headings[currentChapterIdx].text;
+    }
+  }
+
   function buildStandaloneHtml() {
     const r = state.reader;
-    const bgMap = { dark: '#111622', amoled: '#000000', sepia: '#f4ecd8', light: '#ffffff' };
-    const fgMap = { dark: '#dde5f0', amoled: '#d4d4d8', sepia: '#3e2f20', light: '#1e293b' };
-    const fontCss = r.font === 'serif' ? 'Georgia, "Times New Roman", serif' : r.font === 'mono' ? 'ui-monospace, monospace' : 'system-ui, -apple-system, sans-serif';
-    const maxW = r.width === 'narrow' ? '54ch' : r.width === 'wide' ? '88ch' : '68ch';
-    return `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Story Reader — Fixed Output</title><style>body{margin:0;padding:28px 20px 64px;background:${bgMap[r.theme] || '#111622'};color:${fgMap[r.theme] || '#dde5f0'};font-family:${fontCss};font-size:${r.size}px;line-height:1.8;}main{max-width:${maxW};margin:0 auto;}p{margin:0 0 1.15em;${r.justify ? 'text-align:justify;' : ''}}pre{background:rgba(128,128,128,0.12);padding:14px;border-radius:8px;overflow-x:auto;}table{border-collapse:collapse;width:100%;margin:16px 0;}th,td{border:1px solid rgba(128,128,128,0.3);padding:8px 12px;text-align:left;}blockquote{border-left:3px solid #3b82f6;margin:14px 0;padding:8px 14px;background:rgba(59,130,246,0.08);}</style></head><body><main>${previewOutput.innerHTML}</main></body></html>`;
+    const bgMap = { sepia: '#f7f1e3', cream: '#fcfbf7', dark: '#131926', amoled: '#000000' };
+    const fgMap = { sepia: '#2f2419', cream: '#262626', dark: '#dce3ee', amoled: '#d4d4d8' };
+    const fontCss = r.font === 'serif' ? 'Georgia, "Palatino Linotype", serif' : r.font === 'mono' ? 'ui-monospace, monospace' : 'system-ui, sans-serif';
+    const maxW = r.width === 'narrow' ? '56ch' : r.width === 'wide' ? '92ch' : '72ch';
+    const bodyHtml = global.FixerRenderer.renderMarkdownToHtml(state.fixedMarkdown, { bookOrnament: true });
+    return `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Book Reader</title><style>body{margin:0;padding:28px 18px 64px;background:${bgMap[r.theme] || '#f7f1e3'};color:${fgMap[r.theme] || '#2f2419'};font-family:${fontCss};font-size:${r.size}px;line-height:${r.lineHeight};}main{max-width:${maxW};margin:0 auto;}h1,h2,h3{text-align:center;}p{margin:0 0 1.15em;${r.justify ? 'text-align:justify;' : ''}${r.indent ? 'text-indent:1.7em;margin-bottom:0.5em;' : ''}}.scene-break{text-align:center;margin:1.8em 0;letter-spacing:0.25em;opacity:0.7;}pre{background:rgba(128,128,128,0.12);padding:14px;border-radius:8px;overflow-x:auto;}table{border-collapse:collapse;width:100%;margin:16px 0;}th,td{border:1px solid rgba(128,128,128,0.3);padding:8px 12px;text-align:left;}blockquote{border-left:3px solid #9a5523;margin:14px 0;padding:8px 14px;background:rgba(154,85,35,0.08);}</style></head><body><main>${bodyHtml}</main></body></html>`;
   }
 
   function openStandaloneWindow() {
@@ -479,7 +531,7 @@ async function cacheMiddleware(req, res, next) {
       if (!win) {
         URL.revokeObjectURL(url);
         openReaderMode();
-        showToast('Popup diblokir browser. Dibuka di Reader View layar penuh.', 'info');
+        showToast('Popup diblokir browser. Dibuka di Book Reader layar penuh.', 'info');
       }
     } catch (e) {
       openReaderMode();
@@ -581,6 +633,7 @@ async function cacheMiddleware(req, res, next) {
         const clip = await navigator.clipboard.readText();
         if (clip) {
           rawInput.value = clip;
+          state.reader.scrollPos = 0;
           processInput(false);
           showToast('Teks berhasil di-paste dari clipboard!', 'success');
           return;
@@ -609,27 +662,87 @@ async function cacheMiddleware(req, res, next) {
   readerPopoutBtn.addEventListener('click', openStandaloneWindow);
   closeReaderBtn.addEventListener('click', closeReaderMode);
 
+  readerSettingsToggleBtn.addEventListener('click', () => {
+    const isOpen = readerSettingsDrawer.classList.toggle('open');
+    readerSettingsToggleBtn.classList.toggle('active', isOpen);
+  });
+  readerHideBarsBtn.addEventListener('click', () => {
+    readerSettingsDrawer.classList.remove('open');
+    readerSettingsToggleBtn.classList.remove('active');
+    readerOverlay.classList.add('bars-hidden');
+  });
+  readerShowBarsBtn.addEventListener('click', () => {
+    readerOverlay.classList.remove('bars-hidden');
+  });
+
   readerThemeSelect.addEventListener('change', (e) => { state.reader.theme = e.target.value; applyReaderPrefs(); });
   readerFontSelect.addEventListener('change', (e) => { state.reader.font = e.target.value; applyReaderPrefs(); });
   readerWidthSelect.addEventListener('change', (e) => { state.reader.width = e.target.value; applyReaderPrefs(); });
+  readerLineHeightSelect.addEventListener('change', (e) => { state.reader.lineHeight = e.target.value; applyReaderPrefs(); });
   readerFontDecBtn.addEventListener('click', () => { state.reader.size = Math.max(13, state.reader.size - 1); applyReaderPrefs(); });
   readerFontIncBtn.addEventListener('click', () => { state.reader.size = Math.min(26, state.reader.size + 1); applyReaderPrefs(); });
   readerJustifyBtn.addEventListener('click', () => { state.reader.justify = !state.reader.justify; applyReaderPrefs(); });
+  readerIndentBtn.addEventListener('click', () => { state.reader.indent = !state.reader.indent; applyReaderPrefs(); });
+  readerDropCapBtn.addEventListener('click', () => { state.reader.dropCap = !state.reader.dropCap; applyReaderPrefs(); });
   readerAutoScrollSelect.addEventListener('change', (e) => startAutoScroll(Number(e.target.value)));
   readerScroll.addEventListener('scroll', updateReaderProgress, { passive: true });
-  readerArticle.addEventListener('click', () => readerOverlay.classList.toggle('bars-hidden'));
+  readerPrevChapBtn.addEventListener('click', () => jumpChapter(-1));
+  readerNextChapBtn.addEventListener('click', () => jumpChapter(1));
   readerTopBtn.addEventListener('click', () => readerScroll.scrollTo({ top: 0, behavior: 'smooth' }));
 
+  readerArticle.addEventListener('click', (e) => {
+    const btn = e.target.closest('.copy-code-btn');
+    if (btn) {
+      copyText(decodeURIComponent(btn.getAttribute('data-code') || ''), 'Potongan kode disalin!');
+      return;
+    }
+    if (e.target.closest('a, button, pre, code')) return;
+    const sel = window.getSelection ? window.getSelection().toString() : '';
+    if (sel.length > 0) return;
+    readerOverlay.classList.toggle('bars-hidden');
+  });
+
+  readerTtsBtn.addEventListener('click', () => {
+    try {
+      if (!('speechSynthesis' in window)) {
+        showToast('Browser tidak mendukung fitur baca suara.', 'warning');
+        return;
+      }
+      if (window.speechSynthesis.speaking) {
+        stopTts();
+        return;
+      }
+      const text = stripMarkdownToPlain(state.fixedMarkdown);
+      if (!text.trim()) return;
+      const utt = new SpeechSynthesisUtterance(text);
+      utt.lang = 'id-ID';
+      utt.onend = stopTts;
+      utt.onerror = stopTts;
+      window.speechSynthesis.speak(utt);
+      readerTtsBtn.classList.add('active');
+      readerTtsBtn.textContent = 'Stop';
+    } catch (e) {
+      showToast('Gagal memulai pembaca suara.', 'warning');
+    }
+  });
+
+  const THEME_ORDER = ['dark', 'book', 'light'];
+  const THEME_NAMES = { dark: 'Dark', book: 'Book', light: 'Light' };
+
   function applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
-    themeIconSun.style.display = theme === 'dark' ? 'none' : 'block';
-    themeIconMoon.style.display = theme === 'dark' ? 'block' : 'none';
-    storageSet(STORAGE_THEME, theme);
+    const valid = THEME_ORDER.includes(theme) ? theme : 'dark';
+    state.theme = valid;
+    document.documentElement.setAttribute('data-theme', valid);
+    themeLabel.textContent = THEME_NAMES[valid];
+    storageSet(STORAGE_THEME, valid);
+    if (state.fixedMarkdown) {
+      previewOutput.innerHTML = global.FixerRenderer.renderMarkdownToHtml(state.fixedMarkdown, { bookOrnament: valid === 'book' });
+    }
   }
 
   themeToggle.addEventListener('click', () => {
-    const current = document.documentElement.getAttribute('data-theme');
-    applyTheme(current === 'dark' ? 'light' : 'dark');
+    const nextIdx = (THEME_ORDER.indexOf(state.theme) + 1) % THEME_ORDER.length;
+    applyTheme(THEME_ORDER[nextIdx]);
   });
 
   function applyFontSize(size) {
@@ -644,13 +757,15 @@ async function cacheMiddleware(req, res, next) {
   mobBarPaste.addEventListener('click', handlePaste);
   clearBtn.addEventListener('click', () => {
     rawInput.value = '';
+    state.reader.scrollPos = 0;
     processInput(false);
     showToast('Editor dibersihkan.', 'info');
   });
   sampleBtn.addEventListener('click', () => {
     rawInput.value = SAMPLE_TEXT;
+    state.reader.scrollPos = 0;
     processInput(false);
-    showToast('Sample output rusak dimuat.', 'info');
+    showToast('Sample cerita dimuat.', 'info');
   });
   copyResultBtn.addEventListener('click', () => copyText(state.fixedMarkdown, 'Fixed Markdown berhasil disalin!'));
   mobBarCopy.addEventListener('click', () => copyText(state.fixedMarkdown, 'Fixed Markdown berhasil disalin!'));
@@ -680,6 +795,7 @@ async function cacheMiddleware(req, res, next) {
     const reader = new FileReader();
     reader.onload = () => {
       rawInput.value = String(reader.result || '');
+      state.reader.scrollPos = 0;
       processInput(false);
       showToast(`File ${file.name} dimuat.`, 'success');
     };
@@ -700,6 +816,7 @@ async function cacheMiddleware(req, res, next) {
     const reader = new FileReader();
     reader.onload = () => {
       rawInput.value = String(reader.result || '');
+      state.reader.scrollPos = 0;
       processInput(false);
       showToast(`File ${file.name} dimuat.`, 'success');
     };
@@ -824,6 +941,7 @@ async function cacheMiddleware(req, res, next) {
     const entry = state.history[Number(item.getAttribute('data-hist-idx'))];
     if (entry) {
       rawInput.value = entry.raw;
+      state.reader.scrollPos = 0;
       processInput(false);
       showToast('Riwayat dimuat kembali.', 'info');
     }
@@ -882,7 +1000,7 @@ async function cacheMiddleware(req, res, next) {
   } catch (e) {}
 
   renderRulesMenu();
-  applyTheme(storageGet(STORAGE_THEME, 'dark'));
+  applyTheme(storageGet(STORAGE_THEME, 'book'));
   applyFontSize(storageGet(STORAGE_FONT, '14'));
   loadHistory();
 

@@ -13,8 +13,7 @@
 
   function isTableLine(line) {
     const t = line.trim();
-    if (!t) return false;
-    return t.includes('|') && t.split('|').length >= 2;
+    return Boolean(t && t.includes('|') && t.split('|').length >= 2);
   }
 
   function parseTableCells(line) {
@@ -48,9 +47,7 @@
       const row = [...cells];
       if (row.length < maxCols) {
         modified = true;
-        while (row.length < maxCols) {
-          row.push(idx === 1 ? '---' : '');
-        }
+        while (row.length < maxCols) row.push(idx === 1 ? '---' : '');
       }
       if (idx === 1) {
         for (let c = 0; c < row.length; c++) {
@@ -148,7 +145,6 @@
   }
 
   function formatStoryParagraphs(lines, stats) {
-    // Ensure dialogue lines starting with quotes or em-dash have clean paragraph spacing
     const out = [];
     for (let i = 0; i < lines.length; i++) {
       const cur = lines[i];
@@ -194,10 +190,25 @@
   }
 
   function repairInlineFormatting(line, stats) {
-    if (!line.trim() || /^\s*\|/.test(line) || /^\s*[-*_]{3,}\s*$/.test(line)) {
+    const trimmed = line.trim();
+    if (
+      !trimmed ||
+      /^\s*\|/.test(line) ||
+      /^\s*[-*_]{3,}\s*$/.test(line) ||
+      trimmed.startsWith('\\[') ||
+      trimmed.startsWith('\\]') ||
+      trimmed.startsWith('$$')
+    ) {
       return line;
     }
-    let out = line;
+
+    // Protect inline math \(...\) and $...$ before counting * or _
+    const mathHolders = [];
+    let out = line.replace(/(\\\(.+?\\\)|\$[^$\n]+?\$)/g, m => {
+      const id = `\u0002M${mathHolders.length}\u0002`;
+      mathHolders.push(m);
+      return id;
+    });
 
     const backticks = out.match(/`/g);
     if (backticks && backticks.length % 2 === 1) {
@@ -227,6 +238,7 @@
       stats.inlineTags++;
     }
 
+    out = out.replace(/\u0002M(\d+)\u0002/g, (_, idx) => mathHolders[Number(idx)]);
     return out;
   }
 

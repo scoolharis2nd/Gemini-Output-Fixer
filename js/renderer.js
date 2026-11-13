@@ -83,7 +83,8 @@
     return s;
   }
 
-  function renderMarkdownToHtml(md) {
+  function renderMarkdownToHtml(md, options) {
+    const opts = options || {};
     if (!md.trim()) {
       return '<p style="color:var(--text-muted);">Hasil perbaikan akan muncul di sini secara real-time...</p>';
     }
@@ -149,7 +150,7 @@
       }
 
       if (/^([-*_]){3,}\s*$/.test(trimmed)) {
-        htmlParts.push('<hr>');
+        htmlParts.push(opts.bookOrnament ? '<div class="scene-break" aria-hidden="true">&#10022; &nbsp; &#10022; &nbsp; &#10022;</div>' : '<hr>');
         i++;
         continue;
       }
@@ -157,7 +158,7 @@
       const head = trimmed.match(/^(#{1,6})\s+(.+)$/);
       if (head) {
         const lvl = head[1].length;
-        const idAttr = lvl <= 3 ? ` id="toc-h-${headingIdx++}"` : '';
+        const idAttr = lvl <= 3 ? ` id="${opts.idPrefix || 'toc-h-'}${headingIdx++}"` : '';
         htmlParts.push(`<h${lvl}${idAttr}>${renderInlineMarkdown(head[2])}</h${lvl}>`);
         i++;
         continue;

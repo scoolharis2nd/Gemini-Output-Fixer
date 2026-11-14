@@ -7,6 +7,7 @@
   const STORAGE_FONT = 'aistudio_fixer_font_v2';
   const STORAGE_RULES = 'aistudio_fixer_rules_v2';
   const STORAGE_READER = 'aistudio_fixer_reader_v2';
+  const STORAGE_CODE_PREFS = 'aistudio_fixer_codeprefs_v1';
 
   const SAMPLE_TEXT = `#Bab 1: Senja di Stasiun Lama\u200B\u200C
 Angin sore berhembus pelan melewati peron yang hampir kosong. Raka menatap jam saku miliknya yang jarumnya berhenti tepat pada pukul lima lewat sepuluh.
@@ -18,13 +19,23 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
 
 ---
 
-###Catatan Penulis &amp; Referensi
+###Catatan Penulis &amp; Implementasi Kode
 -Latar tempat terinspirasi dari stasiun tua bergaya kolonial
--Gunakan \`Book Reader\` di atas untuk membaca dengan tema kertas novel
+-Gunakan \`Code View\` atau klik tanda panah di kartu kode untuk **Collapse/Expand**
 
-| Bab | Judul | Status
-|---|---|
-| Bab 1 | Senja di Stasiun Lama | Selesai`;
+\`\`\`javascript
+// Simulasi pemutar bab cerita
+async function loadChapter(chapterId) {
+  const res = await fetch(\`/api/chapters/\${chapterId}\`);
+  if (!res.ok) throw new Error('Gagal memuat bab');
+  return res.json();
+}
+\`\`\`
+
+\`\`\`python
+def hitung_estimasi_baca(teks: str, wpm: int = 200) -> int:
+    kata = len(teks.split())
+    return max(1, (kata + wpm - 1) // wpm)`;
 
   const rawInput = document.getElementById('rawInput');
   const previewOutput = document.getElementById('previewOutput');
@@ -58,9 +69,19 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
   const importFileBtn = document.getElementById('importFileBtn');
   const fileInput = document.getElementById('fileInput');
   const extractCodeBtn = document.getElementById('extractCodeBtn');
+  const codeCountBadge = document.getElementById('codeCountBadge');
   const tocToggleBtn = document.getElementById('tocToggleBtn');
   const readerModeBtn = document.getElementById('readerModeBtn');
   const openWindowBtn = document.getElementById('openWindowBtn');
+
+  // Coding Toolbar Elements
+  const codeBarToggleBtn = document.getElementById('codeBarToggleBtn');
+  const codeToolbarBar = document.getElementById('codeToolbarBar');
+  const expandAllCodeBtn = document.getElementById('expandAllCodeBtn');
+  const collapseAllCodeBtn = document.getElementById('collapseAllCodeBtn');
+  const toggleLineNumsBtn = document.getElementById('toggleLineNumsBtn');
+  const toggleWrapAllBtn = document.getElementById('toggleWrapAllBtn');
+  const copyAllCodeBtn = document.getElementById('copyAllCodeBtn');
 
   const findToggleBtn = document.getElementById('findToggleBtn');
   const findBar = document.getElementById('findBar');
@@ -88,6 +109,10 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
   const codeExtractModal = document.getElementById('codeExtractModal');
   const codeExtractBody = document.getElementById('codeExtractBody');
   const closeCodeModalBtn = document.getElementById('closeCodeModalBtn');
+  const codeFilterInput = document.getElementById('codeFilterInput');
+  const modalExpandAllBtn = document.getElementById('modalExpandAllBtn');
+  const modalCollapseAllBtn = document.getElementById('modalCollapseAllBtn');
+  const modalCopyAllCodeBtn = document.getElementById('modalCopyAllCodeBtn');
 
   // Reader View Elements
   const readerOverlay = document.getElementById('readerOverlay');
@@ -140,12 +165,18 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
     useRegex: false,
     caseSensitive: false,
     showToc: false,
+    showCodeBar: false,
     codeBlocks: [],
     headings: [],
     history: [],
     undoStack: [],
     redoStack: [],
     rules: Object.assign({}, global.FixerParser.DEFAULT_RULES),
+    codeOpts: {
+      collapsedDefault: false,
+      showLineNumbers: true,
+      wrapLines: false
+    },
     reader: {
       theme: 'sepia',
       font: 'serif',
@@ -214,6 +245,16 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
     }
   }
 
+  function getExtForLang(lang) {
+    const map = {
+      javascript: 'js', js: 'js', typescript: 'ts', ts: 'ts',
+      python: 'py', py: 'py', html: 'html', css: 'css',
+      json: 'json', sql: 'sql', bash: 'sh', sh: 'sh',
+      java: 'java', cpp: 'cpp', c: 'c', go: 'go', rust: 'rs', php: 'php'
+    };
+    return map[(lang || '').toLowerCase()] || 'txt';
+  }
+
   function pushUndo(val) {
     if (state.undoStack[state.undoStack.length - 1] === val) return;
     state.undoStack.push(val);
@@ -277,6 +318,13 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
     ).join('');
   }
 
+  function renderPreviewOnly() {
+    previewOutput.innerHTML = global.FixerRenderer.renderMarkdownToHtml(state.fixedMarkdown, {
+      bookOrnament: state.theme === 'book',
+      codeOpts: state.codeOpts
+    });
+  }
+
   let processTimer = null;
   let saveTimer = null;
 
@@ -299,9 +347,10 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
     state.isTruncated = stats.truncated;
     state.codeBlocks = codeBlocks;
     state.headings = headings;
+    codeCountBadge.textContent = codeBlocks.length;
 
     rawOutput.value = fixed;
-    previewOutput.innerHTML = global.FixerRenderer.renderMarkdownToHtml(fixed, { bookOrnament: state.theme === 'book' });
+    renderPreviewOnly();
     if (state.viewMode === 'diff') {
       diffOutput.innerHTML = global.FixerRenderer.renderDiffHtml(global.FixerParser.computeLineDiff(inputVal, fixed));
     }
@@ -340,6 +389,114 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
     }
   }
 
+  // =========================================================
+  // CODE CARD INTERACTIONS (COLLAPSE / EXPAND / WRAP / SAVE)
+  // =========================================================
+  function handleCodeCardClick(e, containerEl) {
+    const collapseBtn = e.target.closest('.code-collapse-btn');
+    const leftHeader = e.target.closest('.code-card-left');
+    if (collapseBtn || leftHeader) {
+      const card = e.target.closest('.code-card');
+      if (!card) return;
+      const isCollapsed = card.classList.toggle('collapsed');
+      const btn = card.querySelector('.code-collapse-btn');
+      if (btn) btn.setAttribute('aria-expanded', String(!isCollapsed));
+      return true;
+    }
+
+    const wrapBtn = e.target.closest('.wrap-code-btn');
+    if (wrapBtn) {
+      const card = e.target.closest('.code-card');
+      if (!card) return;
+      const isWrapped = card.classList.toggle('wrap-lines');
+      wrapBtn.classList.toggle('btn-primary', isWrapped);
+      return true;
+    }
+
+    const saveBtn = e.target.closest('.save-code-btn');
+    if (saveBtn) {
+      const code = decodeURIComponent(saveBtn.getAttribute('data-code') || '');
+      const lang = saveBtn.getAttribute('data-lang') || 'txt';
+      const ext = getExtForLang(lang);
+      downloadFile(`snippet.${ext}`, code, 'text/plain');
+      return true;
+    }
+
+    const copyBtn = e.target.closest('.copy-code-btn');
+    if (copyBtn) {
+      const code = decodeURIComponent(copyBtn.getAttribute('data-code') || '');
+      copyText(code, 'Potongan kode disalin!');
+      const orig = copyBtn.textContent;
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => { copyBtn.textContent = orig; }, 1400);
+      return true;
+    }
+
+    const jumpBtn = e.target.closest('.jump-code-btn');
+    if (jumpBtn && containerEl === codeExtractBody) {
+      const idx = jumpBtn.getAttribute('data-code-idx');
+      codeExtractModal.classList.remove('open');
+      setViewMode('preview');
+      const target = document.getElementById('code-block-' + idx);
+      if (target) {
+        target.classList.remove('collapsed');
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.classList.add('code-card-highlight');
+        setTimeout(() => target.classList.remove('code-card-highlight'), 1400);
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  function setAllCodeCardsCollapsed(container, collapsed) {
+    container.querySelectorAll('.code-card').forEach(card => {
+      card.classList.toggle('collapsed', collapsed);
+      const btn = card.querySelector('.code-collapse-btn');
+      if (btn) btn.setAttribute('aria-expanded', String(!collapsed));
+    });
+  }
+
+  function updateCodeToolbarButtons() {
+    toggleLineNumsBtn.classList.toggle('btn-primary', state.codeOpts.showLineNumbers);
+    toggleWrapAllBtn.classList.toggle('btn-primary', state.codeOpts.wrapLines);
+    storageSet(STORAGE_CODE_PREFS, JSON.stringify(state.codeOpts));
+  }
+
+  function renderCodeExplorerList() {
+    const q = (codeFilterInput.value || '').trim().toLowerCase();
+    const filtered = state.codeBlocks
+      .map((cb, idx) => ({ cb, idx }))
+      .filter(({ cb }) => !q || cb.lang.toLowerCase().includes(q) || cb.code.toLowerCase().includes(q));
+
+    if (!filtered.length) {
+      codeExtractBody.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:13px;">Tidak ada blok kode yang cocok.</div>';
+      return;
+    }
+
+    codeExtractBody.innerHTML = filtered.map(({ cb, idx }) => {
+      const html = global.FixerRenderer.buildCodeCardHtml(cb.code, cb.lang, idx, state.codeOpts, 'modal-code-');
+      return html.replace(
+        '<div class="code-card-actions">',
+        `<div class="code-card-actions"><button class="btn btn-sm jump-code-btn" type="button" data-code-idx="${idx}" title="Lompat ke blok kode di Output">Jump</button>`
+      );
+    }).join('');
+  }
+
+  function openCodeExtractModal() {
+    if (!state.codeBlocks.length) {
+      showToast('Tidak ada blok kode ditemukan.', 'warning');
+      return;
+    }
+    codeFilterInput.value = '';
+    renderCodeExplorerList();
+    codeExtractModal.classList.add('open');
+  }
+
+  // =========================================================
+  // HISTORY & RULES
+  // =========================================================
   function loadHistory() {
     try {
       const parsed = JSON.parse(storageGet(STORAGE_HISTORY, '[]'));
@@ -401,7 +558,7 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
   }
 
   // =========================================================
-  // BOOK / FANFICTION READER VIEW + HIDEABLE SETTINGS
+  // BOOK / FANFICTION READER VIEW
   // =========================================================
   let autoScrollTimer = null;
   let currentChapterIdx = 0;
@@ -409,7 +566,9 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
   function renderReaderContent() {
     readerArticle.innerHTML = global.FixerRenderer.renderMarkdownToHtml(state.fixedMarkdown, {
       bookOrnament: true,
-      idPrefix: 'reader-h-'
+      idPrefix: 'reader-h-',
+      codeIdPrefix: 'reader-code-',
+      codeOpts: state.codeOpts
     });
     readerChapterTitle.textContent = state.headings.length ? state.headings[0].text : 'Mode Buku & Fanfiksi';
   }
@@ -515,7 +674,7 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
     const fgMap = { sepia: '#2f2419', cream: '#262626', dark: '#dce3ee', amoled: '#d4d4d8' };
     const fontCss = r.font === 'serif' ? 'Georgia, "Palatino Linotype", serif' : r.font === 'mono' ? 'ui-monospace, monospace' : 'system-ui, sans-serif';
     const maxW = r.width === 'narrow' ? '56ch' : r.width === 'wide' ? '92ch' : '72ch';
-    const bodyHtml = global.FixerRenderer.renderMarkdownToHtml(state.fixedMarkdown, { bookOrnament: true });
+    const bodyHtml = global.FixerRenderer.renderMarkdownToHtml(state.fixedMarkdown, { bookOrnament: true, codeOpts: state.codeOpts });
     return `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Book Reader</title><style>body{margin:0;padding:28px 18px 64px;background:${bgMap[r.theme] || '#f7f1e3'};color:${fgMap[r.theme] || '#2f2419'};font-family:${fontCss};font-size:${r.size}px;line-height:${r.lineHeight};}main{max-width:${maxW};margin:0 auto;}h1,h2,h3{text-align:center;}p{margin:0 0 1.15em;${r.justify ? 'text-align:justify;' : ''}${r.indent ? 'text-indent:1.7em;margin-bottom:0.5em;' : ''}}.scene-break{text-align:center;margin:1.8em 0;letter-spacing:0.25em;opacity:0.7;}pre{background:rgba(128,128,128,0.12);padding:14px;border-radius:8px;overflow-x:auto;}table{border-collapse:collapse;width:100%;margin:16px 0;}th,td{border:1px solid rgba(128,128,128,0.3);padding:8px 12px;text-align:left;}blockquote{border-left:3px solid #9a5523;margin:14px 0;padding:8px 14px;background:rgba(154,85,35,0.08);}</style></head><body><main>${bodyHtml}</main></body></html>`;
   }
 
@@ -539,7 +698,7 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
   }
 
   // =========================================================
-  // FIND & REPLACE, MODALS, EXPORTS
+  // FIND & REPLACE, EXPORTS, HELPERS
   // =========================================================
   function buildFindRegex(globalFlag) {
     const query = findInput.value;
@@ -574,23 +733,6 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
     const tail = sentences.length >= 2 ? sentences.slice(-2).join(' ') : clean.slice(-220);
     continuePromptText.value = `Lanjutkan respons Anda sebelumnya tepat dari titik terakhir ini tanpa mengulang bagian yang sudah dijelaskan. Pastikan format Markdown dan blok kode tetap konsisten.\n\nDua kalimat / bagian terakhir sebelum terpotong:\n"${tail}"`;
     continueModal.classList.add('open');
-  }
-
-  function openCodeExtractModal() {
-    if (!state.codeBlocks.length) {
-      showToast('Tidak ada blok kode ditemukan.', 'warning');
-      return;
-    }
-    codeExtractBody.innerHTML = state.codeBlocks.map((cb, idx) => `
-      <div class="code-card">
-        <div class="code-card-header">
-          <span class="code-lang">#${idx + 1} ${global.FixerRenderer.escapeHtml(cb.lang)}</span>
-          <button class="btn btn-sm extract-copy-btn" type="button" data-code="${encodeURIComponent(cb.code)}">Copy</button>
-        </div>
-        <pre style="max-height:180px;"><code>${global.FixerRenderer.escapeHtml(cb.code)}</code></pre>
-      </div>
-    `).join('');
-    codeExtractModal.classList.add('open');
   }
 
   function downloadFile(filename, content, mime) {
@@ -656,6 +798,57 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
   modeRawBtn.addEventListener('click', () => setViewMode('raw'));
   modeDiffBtn.addEventListener('click', () => setViewMode('diff'));
 
+  // Coding Toolbar Listeners
+  codeBarToggleBtn.addEventListener('click', () => {
+    state.showCodeBar = !state.showCodeBar;
+    codeToolbarBar.classList.toggle('open', state.showCodeBar);
+    codeBarToggleBtn.classList.toggle('btn-primary', state.showCodeBar);
+  });
+  expandAllCodeBtn.addEventListener('click', () => {
+    state.codeOpts.collapsedDefault = false;
+    setAllCodeCardsCollapsed(previewOutput, false);
+  });
+  collapseAllCodeBtn.addEventListener('click', () => {
+    state.codeOpts.collapsedDefault = true;
+    setAllCodeCardsCollapsed(previewOutput, true);
+  });
+  toggleLineNumsBtn.addEventListener('click', () => {
+    state.codeOpts.showLineNumbers = !state.codeOpts.showLineNumbers;
+    updateCodeToolbarButtons();
+    renderPreviewOnly();
+  });
+  toggleWrapAllBtn.addEventListener('click', () => {
+    state.codeOpts.wrapLines = !state.codeOpts.wrapLines;
+    updateCodeToolbarButtons();
+    renderPreviewOnly();
+  });
+  copyAllCodeBtn.addEventListener('click', () => {
+    if (!state.codeBlocks.length) {
+      showToast('Tidak ada blok kode ditemukan.', 'warning');
+      return;
+    }
+    const combined = state.codeBlocks.map((cb, idx) => `// --- [${idx + 1}] ${cb.lang} ---\n${cb.code}`).join('\n\n');
+    copyText(combined, `${state.codeBlocks.length} blok kode disalin!`);
+  });
+
+  // Code Explorer Modal Listeners
+  extractCodeBtn.addEventListener('click', openCodeExtractModal);
+  closeCodeModalBtn.addEventListener('click', () => codeExtractModal.classList.remove('open'));
+  codeExtractModal.addEventListener('click', (e) => {
+    if (e.target === codeExtractModal) codeExtractModal.classList.remove('open');
+  });
+  codeFilterInput.addEventListener('input', renderCodeExplorerList);
+  modalExpandAllBtn.addEventListener('click', () => setAllCodeCardsCollapsed(codeExtractBody, false));
+  modalCollapseAllBtn.addEventListener('click', () => setAllCodeCardsCollapsed(codeExtractBody, true));
+  modalCopyAllCodeBtn.addEventListener('click', () => {
+    const combined = state.codeBlocks.map((cb, idx) => `// --- [${idx + 1}] ${cb.lang} ---\n${cb.code}`).join('\n\n');
+    copyText(combined, 'Semua blok kode disalin!');
+  });
+
+  previewOutput.addEventListener('click', (e) => handleCodeCardClick(e, previewOutput));
+  codeExtractBody.addEventListener('click', (e) => handleCodeCardClick(e, codeExtractBody));
+
+  // Reader View Listeners
   readerModeBtn.addEventListener('click', openReaderMode);
   mobBarReader.addEventListener('click', openReaderMode);
   openWindowBtn.addEventListener('click', openStandaloneWindow);
@@ -671,9 +864,7 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
     readerSettingsToggleBtn.classList.remove('active');
     readerOverlay.classList.add('bars-hidden');
   });
-  readerShowBarsBtn.addEventListener('click', () => {
-    readerOverlay.classList.remove('bars-hidden');
-  });
+  readerShowBarsBtn.addEventListener('click', () => readerOverlay.classList.remove('bars-hidden'));
 
   readerThemeSelect.addEventListener('change', (e) => { state.reader.theme = e.target.value; applyReaderPrefs(); });
   readerFontSelect.addEventListener('change', (e) => { state.reader.font = e.target.value; applyReaderPrefs(); });
@@ -691,11 +882,7 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
   readerTopBtn.addEventListener('click', () => readerScroll.scrollTo({ top: 0, behavior: 'smooth' }));
 
   readerArticle.addEventListener('click', (e) => {
-    const btn = e.target.closest('.copy-code-btn');
-    if (btn) {
-      copyText(decodeURIComponent(btn.getAttribute('data-code') || ''), 'Potongan kode disalin!');
-      return;
-    }
+    if (handleCodeCardClick(e, readerArticle)) return;
     if (e.target.closest('a, button, pre, code')) return;
     const sel = window.getSelection ? window.getSelection().toString() : '';
     if (sel.length > 0) return;
@@ -735,9 +922,7 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
     document.documentElement.setAttribute('data-theme', valid);
     themeLabel.textContent = THEME_NAMES[valid];
     storageSet(STORAGE_THEME, valid);
-    if (state.fixedMarkdown) {
-      previewOutput.innerHTML = global.FixerRenderer.renderMarkdownToHtml(state.fixedMarkdown, { bookOrnament: valid === 'book' });
-    }
+    if (state.fixedMarkdown) renderPreviewOnly();
   }
 
   themeToggle.addEventListener('click', () => {
@@ -765,7 +950,7 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
     rawInput.value = SAMPLE_TEXT;
     state.reader.scrollPos = 0;
     processInput(false);
-    showToast('Sample cerita dimuat.', 'info');
+    showToast('Sample cerita & kode dimuat.', 'info');
   });
   copyResultBtn.addEventListener('click', () => copyText(state.fixedMarkdown, 'Fixed Markdown berhasil disalin!'));
   mobBarCopy.addEventListener('click', () => copyText(state.fixedMarkdown, 'Fixed Markdown berhasil disalin!'));
@@ -823,16 +1008,6 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
     reader.readAsText(file);
   });
 
-  previewOutput.addEventListener('click', (e) => {
-    const btn = e.target.closest('.copy-code-btn');
-    if (!btn) return;
-    const code = decodeURIComponent(btn.getAttribute('data-code') || '');
-    copyText(code, 'Potongan kode disalin!');
-    const orig = btn.textContent;
-    btn.textContent = 'Copied!';
-    setTimeout(() => { btn.textContent = orig; }, 1400);
-  });
-
   tocToggleBtn.addEventListener('click', () => {
     state.showToc = !state.showToc;
     tocToggleBtn.classList.toggle('btn-primary', state.showToc);
@@ -844,17 +1019,6 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
     if (!chip) return;
     const el = document.getElementById(chip.getAttribute('data-toc-id'));
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  });
-
-  extractCodeBtn.addEventListener('click', openCodeExtractModal);
-  closeCodeModalBtn.addEventListener('click', () => codeExtractModal.classList.remove('open'));
-  codeExtractModal.addEventListener('click', (e) => {
-    if (e.target === codeExtractModal) codeExtractModal.classList.remove('open');
-  });
-  codeExtractBody.addEventListener('click', (e) => {
-    const btn = e.target.closest('.extract-copy-btn');
-    if (!btn) return;
-    copyText(decodeURIComponent(btn.getAttribute('data-code') || ''), 'Kode disalin!');
   });
 
   findToggleBtn.addEventListener('click', () => {
@@ -997,9 +1161,12 @@ Raka menoleh perlahan, mendapati Dina berdiri dengan mantel cokelat tuanya. **Ma
     if (savedRules) state.rules = Object.assign({}, state.rules, savedRules);
     const savedReader = JSON.parse(storageGet(STORAGE_READER, 'null'));
     if (savedReader) state.reader = Object.assign({}, state.reader, savedReader);
+    const savedCodePrefs = JSON.parse(storageGet(STORAGE_CODE_PREFS, 'null'));
+    if (savedCodePrefs) state.codeOpts = Object.assign({}, state.codeOpts, savedCodePrefs);
   } catch (e) {}
 
   renderRulesMenu();
+  updateCodeToolbarButtons();
   applyTheme(storageGet(STORAGE_THEME, 'book'));
   applyFontSize(storageGet(STORAGE_FONT, '14'));
   loadHistory();

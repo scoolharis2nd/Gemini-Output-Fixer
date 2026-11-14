@@ -17,7 +17,7 @@
       </div>
       <div class="brand-text">
         <h1>AI Studio Output Fixer &amp; Book Reader</h1>
-        <p>100% Offline Auto-Heal Markdown, Story &amp; Fanfiction Reader</p>
+        <p>100% Offline Auto-Heal Markdown, Coding &amp; Story Reader</p>
       </div>
     </div>
 
@@ -113,7 +113,7 @@
       </div>
 
       <div class="editor-wrap">
-        <textarea id="rawInput" spellcheck="false" placeholder="Paste atau drag &amp; drop cerita, fanfiksi, atau output Google AI Studio di sini..."></textarea>
+        <textarea id="rawInput" spellcheck="false" placeholder="Paste atau drag &amp; drop cerita, fanfiksi, kode, atau output Google AI Studio di sini..."></textarea>
       </div>
     </section>
 
@@ -129,10 +129,23 @@
           <button class="btn btn-sm btn-primary" id="readerModeBtn" type="button">Book Reader</button>
           <button class="btn btn-sm" id="openWindowBtn" type="button">New Window</button>
           <button class="btn btn-sm" id="tocToggleBtn" type="button">TOC</button>
-          <button class="btn btn-sm" id="extractCodeBtn" type="button">Code</button>
+          <button class="btn btn-sm" id="codeBarToggleBtn" type="button" title="Alat Navigasi &amp; Collapse Kode">Code View</button>
+          <button class="btn btn-sm" id="extractCodeBtn" type="button" title="Buka Code Explorer">Code (<span id="codeCountBadge">0</span>)</button>
           <button class="btn btn-sm btn-warning" id="continuePromptBtn" type="button">Continue Prompt</button>
           <button class="btn btn-sm" id="copyPlainBtn" type="button">Copy Text</button>
           <button class="btn btn-sm btn-primary" id="copyResultBtn" type="button">Copy Fixed</button>
+        </div>
+      </div>
+
+      <div class="code-toolbar-bar" id="codeToolbarBar">
+        <div class="code-toolbar-group">
+          <button class="btn btn-sm" id="expandAllCodeBtn" type="button">Expand All</button>
+          <button class="btn btn-sm" id="collapseAllCodeBtn" type="button">Collapse All</button>
+          <button class="btn btn-sm btn-primary" id="toggleLineNumsBtn" type="button">Line #</button>
+          <button class="btn btn-sm" id="toggleWrapAllBtn" type="button">Wrap All</button>
+        </div>
+        <div class="code-toolbar-group">
+          <button class="btn btn-sm" id="copyAllCodeBtn" type="button">Copy All Code</button>
         </div>
       </div>
 
@@ -285,10 +298,16 @@
   </div>
 
   <div class="modal-backdrop" id="codeExtractModal">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="codeModalTitle">
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="codeModalTitle">
       <div class="modal-header">
-        <h2 id="codeModalTitle">Extracted Code Blocks</h2>
+        <h2 id="codeModalTitle">Code Explorer &amp; Navigation</h2>
         <button class="btn btn-sm" id="closeCodeModalBtn" type="button">Tutup</button>
+      </div>
+      <div class="code-explorer-controls">
+        <input class="find-input" id="codeFilterInput" type="text" placeholder="Filter bahasa atau isi kode...">
+        <button class="btn btn-sm" id="modalExpandAllBtn" type="button">Expand All</button>
+        <button class="btn btn-sm" id="modalCollapseAllBtn" type="button">Collapse All</button>
+        <button class="btn btn-sm btn-primary" id="modalCopyAllCodeBtn" type="button">Copy All</button>
       </div>
       <div id="codeExtractBody" style="display:flex;flex-direction:column;gap:10px;"></div>
     </div>

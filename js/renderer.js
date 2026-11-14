@@ -21,14 +21,32 @@
       return id;
     };
 
+    // Strings
     html = html.replace(/(&quot;.*?&quot;|&#39;.*?&#39;|'.*?'|`[^`]*`)/g, m => saveToken('syn-str', m));
-    html = html.replace(/(\/\*[\s\S]*?\*\/|\/\/[^\n]*|#[^\n]*)/g, m => saveToken('syn-com', m));
+
+    // Comments (//..., #..., /*...*/, <!--...-->)
+    html = html.replace(/(&lt;!--[\s\S]*?--&gt;|\/\*[\s\S]*?\*\/|\/\/[^\n]*|#[^\n]*)/g, m => saveToken('syn-com', m));
+
+    // HTML/XML tags
+    if (l === 'html' || l === 'xml' || l === 'svg' || l === 'jsx' || l === 'tsx') {
+      html = html.replace(/(&lt;\/?[a-zA-Z0-9-]+|\/?&gt;)/g, m => saveToken('syn-kw', m));
+    }
+
+    // Decorators / CSS at-rules
+    html = html.replace(/(@[a-zA-Z_][\w-]*)/g, m => saveToken('syn-fn', m));
+
+    // Numbers
     html = html.replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="syn-num">$1</span>');
+
+    // Keywords
     html = html.replace(
-      /\b(const|let|var|function|async|await|return|if|else|for|while|switch|case|break|continue|import|from|export|default|class|extends|new|try|catch|finally|throw|def|elif|pass|None|True|False|SELECT|FROM|WHERE|INSERT|INTO|VALUES|UPDATE|SET|DELETE|JOIN|ON|GROUP|BY|ORDER|LIMIT|CREATE|TABLE|null|undefined|true|false|public|private|static|void|int|string|bool)\b/g,
+      /\b(const|let|var|function|async|await|return|if|else|elif|for|while|switch|case|break|continue|import|from|export|default|class|extends|implements|interface|type|new|try|catch|finally|throw|def|pass|lambda|with|as|yield|None|True|False|SELECT|FROM|WHERE|INSERT|INTO|VALUES|UPDATE|SET|DELETE|JOIN|LEFT|RIGHT|INNER|ON|GROUP|BY|ORDER|LIMIT|CREATE|TABLE|null|undefined|true|false|public|private|protected|static|void|int|float|double|string|bool|boolean|struct|enum|fn|mut|pub|use|mod)\b/g,
       '<span class="syn-kw">$1</span>'
     );
+
+    // Function calls
     html = html.replace(/\b([a-zA-Z_]\w*)(?=\s*\()/g, '<span class="syn-fn">$1</span>');
+
     html = html.replace(/\u0000TOK(\d+)\u0000/g, (_, idx) => tokens[Number(idx)]);
     return html;
   }
@@ -83,6 +101,41 @@
     return s;
   }
 
+  function buildCodeCardHtml(rawCode, lang, idx, codeOpts, idPrefix) {
+    const opts = codeOpts || {};
+    const lineCount = rawCode === '' ? 0 : rawCode.split('\n').length;
+    const encoded = encodeURIComponent(rawCode);
+    const gutterLines = Array.from({ length: Math.max(1, lineCount) }, (_, n) => `<span>${n + 1}</span>`).join('');
+    const cardClasses = [
+      'code-card',
+      opts.collapsedDefault ? 'collapsed' : '',
+      opts.wrapLines ? 'wrap-lines' : ''
+    ].filter(Boolean).join(' ');
+    const gutterClass = opts.showLineNumbers === false ? 'code-gutter hidden' : 'code-gutter';
+    const cardId = `${idPrefix || 'code-block-'}${idx}`;
+
+    return (
+      `<div class="${cardClasses}" id="${cardId}" data-code-idx="${idx}">` +
+      `<div class="code-card-header">` +
+      `<div class="code-card-left">` +
+      `<button class="code-collapse-btn" type="button" title="Collapse / Expand kode" aria-expanded="${!opts.collapsedDefault}">&#9662;</button>` +
+      `<span class="code-lang">${escapeHtml(lang)}</span>` +
+      `<span class="code-meta-badge">${lineCount} baris</span>` +
+      `</div>` +
+      `<div class="code-card-actions">` +
+      `<button class="btn btn-sm wrap-code-btn" type="button" title="Toggle Word Wrap">Wrap</button>` +
+      `<button class="btn btn-sm save-code-btn" type="button" data-lang="${escapeHtml(lang)}" data-code="${encoded}" title="Unduh potongan kode">Save</button>` +
+      `<button class="btn btn-sm copy-code-btn" type="button" data-code="${encoded}">Copy Code</button>` +
+      `</div>` +
+      `</div>` +
+      `<div class="code-body">` +
+      `<div class="${gutterClass}" aria-hidden="true">${gutterLines}</div>` +
+      `<pre><code>${highlightCode(rawCode, lang)}</code></pre>` +
+      `</div>` +
+      `</div>`
+    );
+  }
+
   function renderMarkdownToHtml(md, options) {
     const opts = options || {};
     if (!md.trim()) {
@@ -94,6 +147,7 @@
     const htmlParts = [];
     let i = 0;
     let headingIdx = 0;
+    let codeIdx = 0;
 
     while (i < lines.length) {
       const line = lines[i];
@@ -112,16 +166,7 @@
         }
         i++;
         const rawCode = codeLines.join('\n');
-        const encoded = encodeURIComponent(rawCode);
-        htmlParts.push(
-          `<div class="code-card">` +
-          `<div class="code-card-header">` +
-          `<span class="code-lang">${escapeHtml(lang)}</span>` +
-          `<button class="btn btn-sm copy-code-btn" type="button" data-code="${encoded}">Copy Code</button>` +
-          `</div>` +
-          `<pre><code>${highlightCode(rawCode, lang)}</code></pre>` +
-          `</div>`
-        );
+        htmlParts.push(buildCodeCardHtml(rawCode, lang, codeIdx++, opts.codeOpts, opts.codeIdPrefix));
         continue;
       }
 
@@ -242,6 +287,8 @@
 
   global.FixerRenderer = {
     escapeHtml,
+    highlightCode,
+    buildCodeCardHtml,
     renderMarkdownToHtml,
     renderDiffHtml
   };

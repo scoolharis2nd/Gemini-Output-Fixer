@@ -58,7 +58,3 @@ Dirancang untuk membaca cerita panjang dan catatan dengan nyaman:
 | **Book View** | `[` / `]` | Lompat ke bab sebelumnya / berikutnya |
 | **Book View** | `+` / `-` | Perbesar / perkecil ukuran font |
 | **Book View** | `B` / `R` / `T` | Toggle Bionic Reading / Reading Ruler / TTS |
-
----
-
-## Struktur Proyek

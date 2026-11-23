@@ -3,71 +3,125 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Google AI Studio Output Fixer &amp; Book Reader</title>
+  <title>AI Studio Output Fixer &amp; Book Reader</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
+  <!-- Top Header -->
   <header class="app-header">
     <div class="brand">
       <div class="brand-icon" aria-hidden="true">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+          <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
         </svg>
       </div>
       <div class="brand-text">
-        <h1>AI Studio Output Fixer &amp; Book Reader</h1>
-        <p>100% Offline Auto-Heal Markdown, Coding &amp; Story Reader</p>
+        <h1>AI Studio Output Fixer <span class="brand-tag">Pro</span></h1>
+        <p>100% Offline Auto-Heal Markdown, Code Studio &amp; Book Reader</p>
       </div>
     </div>
 
     <div class="header-controls">
-      <label class="font-control" title="Ukuran Font">
+      <label class="font-control" title="Ukuran Font Editor &amp; Preview">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
+          <polyline points="4 7 4 4 20 4 20 7"/>
+          <line x1="9" y1="20" x2="15" y2="20"/>
+          <line x1="12" y1="4" x2="12" y2="20"/>
         </svg>
         <input type="range" id="fontSizeSlider" min="12" max="22" value="14" aria-label="Font Size">
         <span id="fontSizeLabel">14px</span>
       </label>
 
       <div class="dropdown-wrap">
-        <button class="btn" id="rulesBtn" type="button">Rules</button>
-        <div class="dropdown-menu" id="rulesMenu"></div>
-      </div>
-
-      <div class="dropdown-wrap">
-        <button class="btn" id="historyBtn" type="button">History (<span id="historyCount">0</span>)</button>
-        <div class="dropdown-menu" id="historyMenu"></div>
-      </div>
-
-      <div class="dropdown-wrap">
-        <button class="btn" id="exportBtn" type="button">Export</button>
-        <div class="dropdown-menu" id="exportMenu">
-          <button class="dropdown-item" type="button" data-export="md">
-            <strong>Download Markdown (.md)</strong>
-            <small>Teks Markdown hasil perbaikan</small>
+        <button class="btn" id="samplesBtn" type="button" title="Muat Contoh Kasus">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          <span>Samples</span>
+        </button>
+        <div class="dropdown-menu" id="samplesMenu">
+          <button class="dropdown-item" type="button" data-sample="coding">
+            <strong>Broken AI Coding Output</strong>
+            <small>Unclosed fence, HTML/CSS/JS, JSON, thinking block &amp; truncated</small>
           </button>
-          <button class="dropdown-item" type="button" data-export="txt">
-            <strong>Download Plain Text (.txt)</strong>
-            <small>Teks bersih tanpa simbol Markdown</small>
+          <button class="dropdown-item" type="button" data-sample="story">
+            <strong>Fanfiction / Novel Chapter</strong>
+            <small>Multi-bab, dialog, scene break, italic rusak &amp; terpotong</small>
           </button>
-          <button class="dropdown-item" type="button" data-export="html">
-            <strong>Download Book HTML (.html)</strong>
-            <small>Dokumen gaya buku siap baca offline</small>
+          <button class="dropdown-item" type="button" data-sample="math">
+            <strong>Math &amp; Academic Notes</strong>
+            <small>LaTeX \[ \], pecahan, tabel rusak, callout &amp; daftar</small>
           </button>
-          <button class="dropdown-item" type="button" data-export="json">
-            <strong>Download Data (.json)</strong>
-            <small>Markdown, daftar kode &amp; heading</small>
+          <button class="dropdown-item" type="button" data-sample="escaped">
+            <strong>JSON-Escaped Raw Output</strong>
+            <small>String literal \n, \t, dan \" hasil copy mentah dari API/JSON</small>
           </button>
         </div>
       </div>
 
+      <div class="dropdown-wrap">
+        <button class="btn" id="rulesBtn" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+          <span>Rules</span>
+          <span class="pill-count" id="rulesActiveBadge">10</span>
+        </button>
+        <div class="dropdown-menu dropdown-wide" id="rulesMenu"></div>
+      </div>
+
+      <div class="dropdown-wrap">
+        <button class="btn" id="historyBtn" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span>History</span>
+          <span class="pill-count" id="historyCount">0</span>
+        </button>
+        <div class="dropdown-menu dropdown-wide" id="historyMenu"></div>
+      </div>
+
+      <div class="dropdown-wrap">
+        <button class="btn" id="exportBtn" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Export</span>
+        </button>
+        <div class="dropdown-menu" id="exportMenu">
+          <button class="dropdown-item" type="button" data-export="md">
+            <strong>Download Markdown (.md)</strong>
+            <small>Teks Markdown hasil perbaikan bersih</small>
+          </button>
+          <button class="dropdown-item" type="button" data-export="txt">
+            <strong>Download Plain Text (.txt)</strong>
+            <small>Teks polos tanpa simbol Markdown</small>
+          </button>
+          <button class="dropdown-item" type="button" data-export="html">
+            <strong>Download Interactive Book (.html)</strong>
+            <small>E-book offline lengkap dengan tema &amp; TOC</small>
+          </button>
+          <button class="dropdown-item" type="button" data-export="zip">
+            <strong>Download All Code (.zip)</strong>
+            <small>Arsip ZIP berisi semua blok kode otomatis</small>
+          </button>
+          <button class="dropdown-item" type="button" data-export="json">
+            <strong>Download Structured Data (.json)</strong>
+            <small>Markdown, daftar kode, heading &amp; statistik</small>
+          </button>
+          <button class="dropdown-item" type="button" data-export="print">
+            <strong>Print / Save as PDF</strong>
+            <small>Cetak rapi dengan layout ramah dokumen</small>
+          </button>
+        </div>
+      </div>
+
+      <button class="btn btn-icon" id="shortcutsBtn" type="button" title="Pintasan Keyboard (Ctrl+K)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><path d="M6 8h.001"/><path d="M10 8h.001"/><path d="M14 8h.001"/><path d="M18 8h.001"/><path d="M8 12h.001"/><path d="M12 12h.001"/><path d="M16 12h.001"/><path d="M7 16h10"/></svg>
+      </button>
+
       <button class="btn" id="themeToggle" type="button" title="Ganti Tema (Dark / Book / Light)">
-        Tema: <span id="themeLabel">Dark</span>
+        <span id="themeIcon" aria-hidden="true"></span>
+        <span id="themeLabel">Dark</span>
       </button>
     </div>
   </header>
 
+  <!-- Diagnostic & Stats Bar -->
   <section class="diagnostic-bar" aria-label="Diagnostic Report">
     <div class="diag-badges" id="diagBadges">
       <span class="diag-title">Fix Log:</span>
@@ -77,66 +131,106 @@
     <div class="stats-bar">
       <span>Kata: <strong id="statWords">0</strong></span>
       <span>Karakter: <strong id="statChars">0</strong></span>
+      <span>Baris: <strong id="statLines">0</strong></span>
+      <span>Kode: <strong id="statCodeCount">0</strong></span>
       <span>Baca: <strong id="statRead">0 mnt</strong></span>
     </div>
   </section>
 
+  <!-- Mobile Panel Switcher -->
   <div class="mobile-tabs">
     <button class="mobile-tab-btn active" id="mobTabInput" type="button">Input (Raw)</button>
     <button class="mobile-tab-btn" id="mobTabOutput" type="button">Output (Fixed)</button>
   </div>
 
-  <main class="workspace">
+  <!-- Main Workspace -->
+  <main class="workspace" id="workspace">
+    <!-- Left Input Panel -->
     <section class="panel" id="inputPanel">
       <div class="panel-header">
-        <div class="panel-title">Input (Raw Broken Text)</div>
+        <div class="panel-title-wrap">
+          <span class="status-dot dot-input"></span>
+          <div class="panel-title">Input (Raw)</div>
+        </div>
         <div class="panel-actions">
-          <button class="btn btn-sm" id="undoBtn" type="button" disabled>Undo</button>
-          <button class="btn btn-sm" id="redoBtn" type="button" disabled>Redo</button>
-          <button class="btn btn-sm" id="pasteBtn" type="button">Paste</button>
-          <button class="btn btn-sm" id="importFileBtn" type="button">Import</button>
-          <input type="file" id="fileInput" accept=".txt,.md,.markdown,.log" hidden>
-          <button class="btn btn-sm" id="findToggleBtn" type="button">Find &amp; Replace</button>
-          <button class="btn btn-sm" id="sampleBtn" type="button">Sample</button>
-          <button class="btn btn-sm" id="clearBtn" type="button">Clear</button>
+          <button class="btn btn-sm btn-icon" id="undoBtn" type="button" title="Undo (Ctrl+Z)" disabled>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+          </button>
+          <button class="btn btn-sm btn-icon" id="redoBtn" type="button" title="Redo (Ctrl+Y)" disabled>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/></svg>
+          </button>
+          <button class="btn btn-sm" id="pasteBtn" type="button" title="Tempel dari Clipboard">Paste</button>
+          <button class="btn btn-sm btn-accent-soft" id="stitchBtn" type="button" title="Sambungkan lanjutan output AI tanpa duplikasi">Stitch +</button>
+          <button class="btn btn-sm" id="importFileBtn" type="button" title="Impor file teks/kode">Import</button>
+          <input type="file" id="fileInput" accept=".txt,.md,.markdown,.log,.json,.html,.css,.js,.ts,.py" hidden>
+          <button class="btn btn-sm" id="findToggleBtn" type="button" title="Find &amp; Replace (Ctrl+F)">Find</button>
+          <button class="btn btn-sm" id="clearBtn" type="button" title="Kosongkan Editor">Clear</button>
+          <button class="btn btn-sm btn-icon" id="focusInputBtn" type="button" title="Perluas / Normal Panel Input">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+          </button>
         </div>
       </div>
 
+      <!-- Find & Replace Bar -->
       <div class="find-bar" id="findBar">
         <input class="find-input" id="findInput" type="text" placeholder="Cari teks atau regex...">
         <input class="find-input" id="replaceInput" type="text" placeholder="Ganti dengan...">
         <button class="toggle-pill" id="regexToggle" type="button" title="Gunakan Regex">.*</button>
         <button class="toggle-pill" id="caseToggle" type="button" title="Case Sensitive">Aa</button>
+        <button class="toggle-pill" id="wholeWordToggle" type="button" title="Whole Word">\b</button>
         <span class="find-count" id="findCount">0 cocok</span>
-        <button class="btn btn-sm" id="replaceNextBtn" type="button">Ganti 1</button>
+        <button class="btn btn-sm btn-icon" id="findPrevBtn" type="button" title="Cocokan Sebelumnya">&uarr;</button>
+        <button class="btn btn-sm btn-icon" id="findNextBtn" type="button" title="Cocokan Berikutnya">&darr;</button>
+        <button class="btn btn-sm" id="replaceNextBtn" type="button">Ganti</button>
         <button class="btn btn-sm btn-primary" id="replaceAllBtn" type="button">Semua</button>
+        <button class="btn btn-sm btn-icon" id="closeFindBtn" type="button" title="Tutup">&times;</button>
       </div>
 
       <div class="editor-wrap">
-        <textarea id="rawInput" spellcheck="false" placeholder="Paste atau drag &amp; drop cerita, fanfiksi, kode, atau output Google AI Studio di sini..."></textarea>
+        <textarea id="rawInput" spellcheck="false" placeholder="Paste atau drag &amp; drop cerita, fanfiksi, kode, rumus, atau output Google AI Studio di sini...&#10;&#10;Tips: Klik 'Samples' di pojok atas untuk mencoba perbaikan otomatis, Code Studio, Live Preview, dan Book Reader!"></textarea>
+      </div>
+
+      <div class="editor-footer" id="editorStatusBar">
+        <span id="cursorPos">Baris 1, Kol 1</span>
+        <span id="selectionInfo"></span>
+        <span id="inputEncodingHint">Drag &amp; drop file didukung</span>
       </div>
     </section>
 
+    <!-- Desktop Resizable Divider -->
+    <div class="split-divider" id="splitDivider" role="separator" aria-orientation="vertical" title="Seret untuk ubah ukuran panel (Klik ganda untuk reset 50:50)">
+      <div class="split-handle"></div>
+    </div>
+
+    <!-- Right Output Panel -->
     <section class="panel mobile-hidden" id="outputPanel">
       <div class="panel-header">
-        <div class="panel-title">Output (Fixed Result)</div>
+        <div class="view-switch" role="tablist">
+          <button type="button" id="modePreviewBtn" class="active" role="tab" aria-selected="true">Preview</button>
+          <button type="button" id="modeRawBtn" role="tab" aria-selected="false">Raw MD</button>
+          <button type="button" id="modeDiffBtn" role="tab" aria-selected="false">Diff</button>
+          <button type="button" id="modeCodeBtn" role="tab" aria-selected="false">Code <span class="tab-badge" id="codeTabCount">0</span></button>
+        </div>
+
         <div class="panel-actions">
-          <div class="view-switch" role="tablist">
-            <button type="button" id="modePreviewBtn" class="active" role="tab">Rendered Preview</button>
-            <button type="button" id="modeRawBtn" role="tab">Fixed Raw Markdown</button>
-            <button type="button" id="modeDiffBtn" role="tab">Diff</button>
-          </div>
-          <button class="btn btn-sm btn-primary" id="readerModeBtn" type="button">Book Reader</button>
-          <button class="btn btn-sm" id="openWindowBtn" type="button">New Window</button>
-          <button class="btn btn-sm" id="tocToggleBtn" type="button">TOC</button>
-          <button class="btn btn-sm" id="codeBarToggleBtn" type="button" title="Alat Navigasi &amp; Collapse Kode">Code View</button>
-          <button class="btn btn-sm" id="extractCodeBtn" type="button" title="Buka Code Explorer">Code (<span id="codeCountBadge">0</span>)</button>
-          <button class="btn btn-sm btn-warning" id="continuePromptBtn" type="button">Continue Prompt</button>
-          <button class="btn btn-sm" id="copyPlainBtn" type="button">Copy Text</button>
-          <button class="btn btn-sm btn-primary" id="copyResultBtn" type="button">Copy Fixed</button>
+          <button class="btn btn-sm btn-primary" id="readerModeBtn" type="button" title="Mode Baca Buku &amp; Fanfiksi (Ctrl+B)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            <span>Book View</span>
+          </button>
+          <button class="btn btn-sm" id="syncScrollBtn" type="button" title="Sinkronisasi Scroll Input &amp; Output">Sync</button>
+          <button class="btn btn-sm" id="tocToggleBtn" type="button" title="Daftar Isi (Table of Contents)">TOC</button>
+          <button class="btn btn-sm" id="codeBarToggleBtn" type="button" title="Toolbar Cepat Blok Kode">Code Tools</button>
+          <button class="btn btn-sm" id="openWindowBtn" type="button" title="Buka pratinjau di tab baru">Tab Baru</button>
+          <button class="btn btn-sm btn-warning" id="continuePromptBtn" type="button" title="Buat prompt untuk melanjutkan output yang terpotong">Continue</button>
+          <button class="btn btn-sm" id="copyPlainBtn" type="button" title="Salin teks polos tanpa Markdown">Copy Text</button>
+          <button class="btn btn-sm btn-primary" id="copyResultBtn" type="button" title="Salin Markdown hasil perbaikan (Ctrl+Shift+C)">Copy Fixed</button>
+          <button class="btn btn-sm btn-icon" id="focusOutputBtn" type="button" title="Perluas / Normal Panel Output">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+          </button>
         </div>
       </div>
 
+      <!-- Code Global Toolbar -->
       <div class="code-toolbar-bar" id="codeToolbarBar">
         <div class="code-toolbar-group">
           <button class="btn btn-sm" id="expandAllCodeBtn" type="button">Expand All</button>
@@ -145,22 +239,53 @@
           <button class="btn btn-sm" id="toggleWrapAllBtn" type="button">Wrap All</button>
         </div>
         <div class="code-toolbar-group">
-          <button class="btn btn-sm" id="copyAllCodeBtn" type="button">Copy All Code</button>
+          <button class="btn btn-sm" id="openCodeModalBtn" type="button">Code Explorer</button>
+          <button class="btn btn-sm" id="downloadZipBtn" type="button">Download .ZIP</button>
+          <button class="btn btn-sm btn-primary" id="copyAllCodeBtn" type="button">Copy All Code</button>
         </div>
       </div>
 
+      <!-- Diff Toolbar -->
+      <div class="code-toolbar-bar" id="diffToolbarBar">
+        <div class="code-toolbar-group">
+          <span class="badge" id="diffStatsBadge">+0 / -0 baris</span>
+          <button class="btn btn-sm" id="diffChangesOnlyBtn" type="button">Hanya Perubahan</button>
+        </div>
+        <div class="code-toolbar-group">
+          <button class="btn btn-sm" id="diffCopyPatchBtn" type="button">Copy Unified Diff</button>
+        </div>
+      </div>
+
+      <!-- TOC Quick Chips -->
       <div class="toc-bar" id="tocBar"></div>
+
+      <!-- View 1: Rendered Preview -->
       <div class="output-body md-preview" id="previewOutput"></div>
+
+      <!-- View 2: Fixed Raw Markdown -->
       <textarea class="raw-output" id="rawOutput" readonly spellcheck="false"></textarea>
+
+      <!-- View 3: Diff View -->
       <div class="diff-view" id="diffOutput"></div>
 
+      <!-- View 4: Dedicated Code Studio View -->
+      <div class="code-studio-view" id="codeViewOutput"></div>
+
+      <!-- Truncation Warning Banner -->
       <div class="truncation-banner" id="truncationBanner">
-        <span><strong>Terdeteksi terpotong!</strong> Teks berhenti di tengah kalimat/kode.</span>
-        <button class="btn btn-sm btn-warning" id="bannerContinueBtn" type="button">Generate Continue Prompt</button>
+        <div class="truncation-msg">
+          <strong>Terdeteksi terpotong!</strong>
+          <span id="truncationReasonText">Output berhenti di tengah kalimat atau blok kode.</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-sm btn-warning" id="bannerContinueBtn" type="button">Continue Prompt</button>
+          <button class="btn btn-sm" id="bannerStitchBtn" type="button">Stitch Lanjutan</button>
+        </div>
       </div>
     </section>
   </main>
 
+  <!-- Mobile Bottom Quick Bar -->
   <nav class="mobile-bottom-bar" aria-label="Mobile Quick Actions">
     <button class="mob-bar-btn" id="mobBarPaste" type="button">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
@@ -184,112 +309,216 @@
     </button>
   </nav>
 
-  <!-- Book / Fanfiction Full-Screen Reader Mode -->
+  <!-- =========================================================
+       FULL-SCREEN BOOK & FANFICTION READER OVERLAY
+       ========================================================= -->
   <div class="reader-overlay" id="readerOverlay" data-rtheme="sepia" role="dialog" aria-modal="true" aria-label="Book Reader Mode">
+    <!-- Dimmer & Warm Night Filter Layer -->
+    <div class="reader-dimmer" id="readerDimmer"></div>
+
+    <!-- Reading Ruler (Focus Line) -->
+    <div class="reader-ruler" id="readerRuler" aria-hidden="true"></div>
+
+    <!-- Top Progress Bar -->
     <div class="reader-progress-track">
       <div class="reader-progress-fill" id="readerProgressFill"></div>
     </div>
 
-    <button class="reader-float-show" id="readerShowBarsBtn" type="button">Menu</button>
+    <!-- Floating Menu Reveal Button (when bars hidden) -->
+    <button class="reader-float-show" id="readerShowBarsBtn" type="button">Tampilkan Menu</button>
 
+    <!-- Reader Topbar -->
     <div class="reader-topbar" id="readerTopbar">
-      <button class="reader-btn" id="closeReaderBtn" type="button">&larr; Tutup</button>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button class="reader-btn" id="closeReaderBtn" type="button">&larr; Tutup</button>
+        <button class="reader-btn" id="readerTocDrawerBtn" type="button" title="Daftar Bab &amp; Bookmark">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="15" y2="18"/></svg>
+          <span class="hide-xs">Bab</span>
+        </button>
+      </div>
+
       <span class="reader-chapter-title" id="readerChapterTitle">Mode Buku &amp; Fanfiksi</span>
+
       <div class="reader-top-actions">
-        <button class="reader-btn" id="readerSettingsToggleBtn" type="button">Pengaturan</button>
-        <button class="reader-btn" id="readerHideBarsBtn" type="button">Sembunyikan</button>
-        <button class="reader-btn" id="readerPopoutBtn" type="button">Tab Baru</button>
+        <button class="reader-btn" id="readerBookmarkBtn" type="button" title="Simpan Bookmark Posisi Ini">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+        </button>
+        <button class="reader-btn" id="readerSettingsToggleBtn" type="button">Tampilan</button>
+        <button class="reader-btn" id="readerHideBarsBtn" type="button" title="Sembunyikan Menu (H)">Fokus</button>
+        <button class="reader-btn hide-xs" id="readerPopoutBtn" type="button">Tab Baru</button>
       </div>
     </div>
 
+    <!-- Slide-out Chapters & Bookmarks Drawer -->
+    <div class="reader-drawer-backdrop" id="readerDrawerBackdrop"></div>
+    <aside class="reader-drawer" id="readerDrawer" aria-label="Navigasi Buku">
+      <div class="reader-drawer-header">
+        <div class="reader-drawer-tabs">
+          <button class="reader-btn active" id="drawerTabChapters" type="button">Daftar Bab</button>
+          <button class="reader-btn" id="drawerTabBookmarks" type="button">Bookmark</button>
+        </div>
+        <button class="reader-btn" id="closeReaderDrawerBtn" type="button">&times;</button>
+      </div>
+      <div class="reader-drawer-body" id="readerChaptersList"></div>
+      <div class="reader-drawer-body" id="readerBookmarksList" style="display:none;"></div>
+    </aside>
+
+    <!-- Reader Collapsible Settings Panel -->
     <div class="reader-settings-drawer" id="readerSettingsDrawer">
-      <label class="reader-setting-group">
-        Tema:
-        <select class="reader-select" id="readerThemeSelect" aria-label="Tema Baca">
-          <option value="sepia">Kertas Buku (Sepia)</option>
-          <option value="cream">Kertas Putih Hangat</option>
-          <option value="dark">Malam (Dark)</option>
-          <option value="amoled">AMOLED Hitam</option>
-        </select>
-      </label>
+      <div class="reader-settings-row">
+        <label class="reader-setting-group">
+          Tema:
+          <select class="reader-select" id="readerThemeSelect" aria-label="Tema Baca">
+            <option value="sepia">Sepia (Kertas Novel)</option>
+            <option value="cream">Cream (Putih Hangat)</option>
+            <option value="parchment">Parchment (Klasik)</option>
+            <option value="sage">Sage (Hijau Lembut)</option>
+            <option value="dark">Malam (Dark Slate)</option>
+            <option value="amoled">AMOLED Hitam</option>
+          </select>
+        </label>
 
-      <label class="reader-setting-group">
-        Font:
-        <select class="reader-select" id="readerFontSelect" aria-label="Jenis Font">
-          <option value="serif">Serif (Novel)</option>
-          <option value="sans">Sans-Serif</option>
-          <option value="mono">Monospace</option>
-        </select>
-      </label>
+        <label class="reader-setting-group">
+          Font:
+          <select class="reader-select" id="readerFontSelect" aria-label="Jenis Font">
+            <option value="serif">Serif (Georgia)</option>
+            <option value="palatino">Literary (Palatino)</option>
+            <option value="sans">Modern Sans</option>
+            <option value="dyslexic">Ramah Fokus (Lega)</option>
+            <option value="mono">Monospace</option>
+          </select>
+        </label>
 
-      <label class="reader-setting-group">
-        Lebar:
-        <select class="reader-select" id="readerWidthSelect" aria-label="Lebar Halaman">
-          <option value="narrow">Sempit</option>
-          <option value="medium" selected>Nyaman</option>
-          <option value="wide">Lebar</option>
-        </select>
-      </label>
+        <label class="reader-setting-group">
+          Lebar:
+          <select class="reader-select" id="readerWidthSelect" aria-label="Lebar Halaman">
+            <option value="narrow">Sempit</option>
+            <option value="book">Novel (65ch)</option>
+            <option value="medium" selected>Nyaman (74ch)</option>
+            <option value="wide">Lebar (92ch)</option>
+            <option value="full">Penuh</option>
+          </select>
+        </label>
 
-      <div class="reader-setting-group">
-        Ukuran:
-        <button class="reader-btn" id="readerFontDecBtn" type="button">A-</button>
-        <span id="readerFontSizeLabel">18px</span>
-        <button class="reader-btn" id="readerFontIncBtn" type="button">A+</button>
+        <div class="reader-setting-group">
+          Ukuran:
+          <button class="reader-btn" id="readerFontDecBtn" type="button">A-</button>
+          <span id="readerFontSizeLabel">18px</span>
+          <button class="reader-btn" id="readerFontIncBtn" type="button">A+</button>
+        </div>
+
+        <label class="reader-setting-group">
+          Spasi:
+          <select class="reader-select" id="readerLineHeightSelect" aria-label="Spasi Baris">
+            <option value="1.5">Rapat (1.5)</option>
+            <option value="1.7">Standar (1.7)</option>
+            <option value="1.85" selected>Nyaman (1.85)</option>
+            <option value="2.05">Lega (2.05)</option>
+            <option value="2.3">Sangat Lega (2.3)</option>
+          </select>
+        </label>
       </div>
 
-      <label class="reader-setting-group">
-        Spasi Baris:
-        <select class="reader-select" id="readerLineHeightSelect" aria-label="Spasi Baris">
-          <option value="1.6">Rapat (1.6)</option>
-          <option value="1.85" selected>Nyaman (1.85)</option>
-          <option value="2.1">Lega (2.1)</option>
-        </select>
-      </label>
+      <div class="reader-settings-row">
+        <button class="reader-btn" id="readerJustifyBtn" type="button">Rata Kanan-Kiri</button>
+        <button class="reader-btn" id="readerIndentBtn" type="button">Indentasi Novel</button>
+        <button class="reader-btn" id="readerDropCapBtn" type="button">Drop Cap</button>
+        <button class="reader-btn" id="readerDialogueBtn" type="button" title="Beri warna halus pada teks dialog bertanda kutip">Sorot Dialog</button>
+        <button class="reader-btn" id="readerBionicBtn" type="button" title="Tebalkan awal kata untuk membaca lebih cepat (B)">Bionic Read</button>
+        <button class="reader-btn" id="readerRulerBtn" type="button" title="Garis bantu fokus membaca (R)">Reading Ruler</button>
+        <button class="reader-btn" id="readerColumnsBtn" type="button" title="Tampilan 2 halaman terbuka (Desktop)">2 Kolom</button>
+      </div>
 
-      <button class="reader-btn" id="readerJustifyBtn" type="button">Rata Kanan-Kiri</button>
-      <button class="reader-btn" id="readerIndentBtn" type="button">Indentasi Buku</button>
-      <button class="reader-btn" id="readerDropCapBtn" type="button">Drop Cap</button>
+      <div class="reader-settings-row">
+        <label class="reader-setting-group">
+          Redup:
+          <input type="range" id="readerDimmerSlider" min="0" max="60" value="0" style="width:74px;">
+          <span id="readerDimmerLabel">0%</span>
+        </label>
 
-      <label class="reader-setting-group">
-        Auto-Scroll:
-        <select class="reader-select" id="readerAutoScrollSelect" aria-label="Auto Scroll">
-          <option value="0">Off</option>
-          <option value="1">Lambat</option>
-          <option value="2">Sedang</option>
-          <option value="4">Cepat</option>
-        </select>
-      </label>
+        <label class="reader-setting-group">
+          Hangat:
+          <input type="range" id="readerWarmthSlider" min="0" max="45" value="0" style="width:74px;">
+          <span id="readerWarmthLabel">0%</span>
+        </label>
+
+        <label class="reader-setting-group">
+          Auto-Scroll:
+          <select class="reader-select" id="readerAutoScrollSelect" aria-label="Kecepatan Auto Scroll">
+            <option value="0">Off</option>
+            <option value="0.5">Sangat Lambat</option>
+            <option value="1">Lambat</option>
+            <option value="2">Sedang</option>
+            <option value="3.5">Cepat</option>
+            <option value="5">Sangat Cepat</option>
+          </select>
+        </label>
+
+        <label class="reader-setting-group">
+          Suara TTS:
+          <select class="reader-select" id="readerTtsVoiceSelect" aria-label="Suara TTS" style="max-width:150px;"></select>
+        </label>
+
+        <label class="reader-setting-group">
+          Laju:
+          <select class="reader-select" id="readerTtsRateSelect" aria-label="Kecepatan TTS">
+            <option value="0.8">0.8x</option>
+            <option value="1" selected>1.0x</option>
+            <option value="1.2">1.2x</option>
+            <option value="1.4">1.4x</option>
+            <option value="1.75">1.75x</option>
+          </select>
+        </label>
+
+        <button class="reader-btn" id="readerPrintBtn" type="button">Print / PDF</button>
+        <button class="reader-btn" id="readerResetSettingsBtn" type="button">Reset</button>
+      </div>
     </div>
 
+    <!-- Reader Scrollable Page -->
     <div class="reader-scroll" id="readerScroll">
       <div class="reader-page width-medium" id="readerPage">
         <article class="reader-article font-serif drop-cap md-preview" id="readerArticle"></article>
       </div>
     </div>
 
+    <!-- Reader Bottom Status Bar -->
     <div class="reader-bottombar" id="readerBottombar">
       <div style="display:flex;gap:6px;">
-        <button class="reader-btn" id="readerPrevChapBtn" type="button">&lsaquo; Bab</button>
-        <button class="reader-btn" id="readerNextChapBtn" type="button">Bab &rsaquo;</button>
+        <button class="reader-btn" id="readerPrevChapBtn" type="button" title="Bab Sebelumnya ([)">&lsaquo; Bab</button>
+        <button class="reader-btn" id="readerNextChapBtn" type="button" title="Bab Berikutnya (])">Bab &rsaquo;</button>
       </div>
-      <span id="readerStatusText">0% &bull; ~0 mnt tersisa</span>
+
+      <span class="reader-status-text" id="readerStatusText">0% &bull; ~0 mnt tersisa</span>
+
       <div style="display:flex;gap:6px;">
-        <button class="reader-btn" id="readerTtsBtn" type="button">Bacakan</button>
-        <button class="reader-btn" id="readerTopBtn" type="button">Atas &uarr;</button>
+        <button class="reader-btn" id="readerAutoScrollToggleBtn" type="button" title="Play/Pause Auto-Scroll (Space)">Scroll</button>
+        <button class="reader-btn" id="readerTtsBtn" type="button" title="Bacakan Teks (T)">Bacakan</button>
+        <button class="reader-btn" id="readerTopBtn" type="button" title="Kembali ke Atas">&uarr;</button>
       </div>
     </div>
   </div>
 
+  <!-- =========================================================
+       MODALS
+       ========================================================= -->
+
+  <!-- Modal 1: Smart Continuation Prompt -->
   <div class="modal-backdrop" id="continueModal">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
       <div class="modal-header">
         <h2 id="modalTitle">Smart Continuation Prompt</h2>
         <button class="btn btn-sm" id="closeModalBtn" type="button">Tutup</button>
       </div>
-      <p style="font-size:12.5px; color:var(--text-secondary);">
-        Salin prompt di bawah ini dan paste kembali ke Google AI Studio untuk melanjutkan generasi teks tepat dari bagian terakhir:
-      </p>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <p style="font-size:12.5px; color:var(--text-secondary);">
+          Salin prompt di bawah dan tempel ke Google AI Studio untuk menyambung output tepat dari titik terakhir:
+        </p>
+        <div class="view-switch">
+          <button type="button" id="continueLangIdBtn" class="active">Indonesia</button>
+          <button type="button" id="continueLangEnBtn">English</button>
+        </div>
+      </div>
       <textarea id="continuePromptText" readonly></textarea>
       <div class="modal-actions">
         <button class="btn btn-primary" id="copyContinueBtn" type="button">Copy Prompt</button>
@@ -297,19 +526,106 @@
     </div>
   </div>
 
+  <!-- Modal 2: Smart Overlap Stitcher -->
+  <div class="modal-backdrop" id="stitchModal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="stitchModalTitle">
+      <div class="modal-header">
+        <h2 id="stitchModalTitle">Smart Continuation Stitcher</h2>
+        <button class="btn btn-sm" id="closeStitchModalBtn" type="button">Tutup</button>
+      </div>
+      <p style="font-size:12.5px; color:var(--text-secondary);">
+        Tempel hasil <strong>lanjutan (Part 2)</strong> dari AI di sini. Kalimat atau pembuka blok kode yang terulang oleh AI akan otomatis dibersihkan lalu digabungkan secara mulus!
+      </p>
+      <textarea id="stitchPart2Input" placeholder="Tempel teks lanjutan dari Google AI Studio di sini..."></textarea>
+      <div class="badge" id="stitchPreviewInfo">Menunggu teks lanjutan...</div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="applyStitchBtn" type="button">Gabungkan Sekarang</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 3: Code Explorer -->
   <div class="modal-backdrop" id="codeExtractModal">
     <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="codeModalTitle">
       <div class="modal-header">
-        <h2 id="codeModalTitle">Code Explorer &amp; Navigation</h2>
+        <h2 id="codeModalTitle">Code Explorer &amp; Studio</h2>
         <button class="btn btn-sm" id="closeCodeModalBtn" type="button">Tutup</button>
       </div>
       <div class="code-explorer-controls">
-        <input class="find-input" id="codeFilterInput" type="text" placeholder="Filter bahasa atau isi kode...">
+        <input class="find-input" id="codeFilterInput" type="text" placeholder="Cari bahasa, nama file, atau isi kode...">
         <button class="btn btn-sm" id="modalExpandAllBtn" type="button">Expand All</button>
         <button class="btn btn-sm" id="modalCollapseAllBtn" type="button">Collapse All</button>
+        <button class="btn btn-sm btn-accent-soft" id="modalRunWebBtn" type="button" style="display:none;">Run Web Preview</button>
+        <button class="btn btn-sm" id="modalDownloadZipBtn" type="button">Download .ZIP</button>
         <button class="btn btn-sm btn-primary" id="modalCopyAllCodeBtn" type="button">Copy All</button>
       </div>
-      <div id="codeExtractBody" style="display:flex;flex-direction:column;gap:10px;"></div>
+      <div class="lang-chips" id="modalLangChips"></div>
+      <div id="codeExtractBody" style="display:flex;flex-direction:column;gap:12px;"></div>
+    </div>
+  </div>
+
+  <!-- Modal 4: Live HTML/CSS/JS/SVG Sandbox Preview -->
+  <div class="modal-backdrop" id="sandboxModal">
+    <div class="modal modal-xl" role="dialog" aria-modal="true" aria-labelledby="sandboxTitle">
+      <div class="modal-header">
+        <h2 id="sandboxTitle">Live Sandbox Preview</h2>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-sm" id="sandboxRefreshBtn" type="button">Reload</button>
+          <button class="btn btn-sm" id="sandboxOpenTabBtn" type="button">Buka Tab Baru</button>
+          <button class="btn btn-sm" id="closeSandboxModalBtn" type="button">Tutup</button>
+        </div>
+      </div>
+      <div class="sandbox-frame-wrap">
+        <iframe id="sandboxFrame" sandbox="allow-scripts" title="Live Code Sandbox"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 5: Fullscreen Zen Code Focus -->
+  <div class="modal-backdrop" id="codeFocusModal">
+    <div class="modal modal-xl" role="dialog" aria-modal="true" aria-labelledby="codeFocusTitle">
+      <div class="modal-header">
+        <h2 id="codeFocusTitle">Code Focus</h2>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-sm" id="codeFocusDownloadBtn" type="button">Download</button>
+          <button class="btn btn-sm btn-primary" id="codeFocusCopyBtn" type="button">Copy</button>
+          <button class="btn btn-sm" id="closeCodeFocusBtn" type="button">Tutup</button>
+        </div>
+      </div>
+      <div class="code-focus-body" id="codeFocusBody"></div>
+    </div>
+  </div>
+
+  <!-- Modal 6: Keyboard Shortcuts -->
+  <div class="modal-backdrop" id="shortcutsModal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
+      <div class="modal-header">
+        <h2 id="shortcutsTitle">Pintasan Keyboard &amp; Tips</h2>
+        <button class="btn btn-sm" id="closeShortcutsModalBtn" type="button">Tutup</button>
+      </div>
+      <div class="shortcuts-grid">
+        <div class="shortcut-section">
+          <h3>Editor &amp; Workspace</h3>
+          <div class="shortcut-row"><span>Find &amp; Replace</span><kbd>Ctrl + F</kbd></div>
+          <div class="shortcut-row"><span>Copy Fixed Markdown</span><kbd>Ctrl + Shift + C</kbd></div>
+          <div class="shortcut-row"><span>Buka / Tutup Book View</span><kbd>Ctrl + B</kbd></div>
+          <div class="shortcut-row"><span>Buka Pintasan ini</span><kbd>Ctrl + K</kbd></div>
+          <div class="shortcut-row"><span>Tutup Modal / Panel</span><kbd>Esc</kbd></div>
+        </div>
+        <div class="shortcut-section">
+          <h3>Book Reader Mode</h3>
+          <div class="shortcut-row"><span>Sembunyikan / Tampilkan Menu</span><kbd>H</kbd></div>
+          <div class="shortcut-row"><span>Play / Pause Auto-Scroll</span><kbd>Space</kbd></div>
+          <div class="shortcut-row"><span>Bab Sebelumnya / Berikutnya</span><kbd>[</kbd> / <kbd>]</kbd></div>
+          <div class="shortcut-row"><span>Perbesar / Perkecil Font</span><kbd>+</kbd> / <kbd>-</kbd></div>
+          <div class="shortcut-row"><span>Toggle Bionic Reading</span><kbd>B</kbd></div>
+          <div class="shortcut-row"><span>Toggle Reading Ruler</span><kbd>R</kbd></div>
+          <div class="shortcut-row"><span>Toggle Bacakan (TTS)</span><kbd>T</kbd></div>
+        </div>
+      </div>
+      <p style="font-size:12px;color:var(--text-muted);">
+        Tip: Di dalam <strong>Book View</strong>, klik/ketuk bagian tengah halaman untuk menyembunyikan atau memunculkan menu. Di <strong>Code View</strong>, klik nomor baris (atau <code>Shift+Klik</code>) untuk menyorot rentang baris!
+      </p>
     </div>
   </div>
 

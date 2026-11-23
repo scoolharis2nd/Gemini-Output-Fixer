@@ -1,840 +1,918 @@
-/* =========================================================
-   MARKDOWN, LATEX MATH, SINGLE-PASS SYNTAX HIGHLIGHTER,
-   CODE STUDIO, DIFF & STANDALONE BOOK HTML RENDERER
-   ========================================================= */
+/**
+ * Google AI Studio Output Fixer — Masterpiece Markdown, Code & Book Renderer
+ * Architecture:
+ * - XSS-safe escaping on all user content
+ * - Single-Pass Tokenized Syntax Highlighter (eliminates corrupted HTML tag bugs)
+ * - IDE-grade Interactive Code Cards with line numbers, wrap, download & live preview support
+ * - Literary Book Mode with ornamental scene breaks, drop caps & safe dialogue highlighting
+ */
 (function (global) {
-  "use strict";
+  'use strict';
+
+  const LANG_META = {
+    javascript: { label: 'JavaScript', ext: 'js', color: '#f7df1e', previewable: false },
+    typescript: { label: 'TypeScript', ext: 'ts', color: '#3178c6', previewable: false },
+    python:     { label: 'Python',     ext: 'py', color: '#3776ab', previewable: false },
+    html:       { label: 'HTML',       ext: 'html', color: '#e34f26', previewable: true },
+    svg:        { label: 'SVG',        ext: 'svg', color: '#ffb13b', previewable: true },
+    xml:        { label: 'XML',        ext: 'xml', color: '#f97316', previewable: false },
+    css:        { label: 'CSS',        ext: 'css', color: '#38bdf8', previewable: false },
+    scss:       { label: 'SCSS',       ext: 'scss', color: '#ec4899', previewable: false },
+    json:       { label: 'JSON',       ext: 'json', color: '#10b981', previewable: false },
+    sql:        { label: 'SQL',        ext: 'sql', color: '#a855f7', previewable: false },
+    bash:       { label: 'Bash',       ext: 'sh', color: '#4ade80', previewable: false },
+    java:       { label: 'Java',       ext: 'java', color: '#f89820', previewable: false },
+    cpp:        { label: 'C++',        ext: 'cpp', color: '#60a5fa', previewable: false },
+    c:          { label: 'C',          ext: 'c', color: '#60a5fa', previewable: false },
+    csharp:     { label: 'C#',         ext: 'cs', color: '#9b4f96', previewable: false },
+    go:         { label: 'Go',         ext: 'go', color: '#00add8', previewable: false },
+    rust:       { label: 'Rust',       ext: 'rs', color: '#dea584', previewable: false },
+    php:        { label: 'PHP',        ext: 'php', color: '#777bb4', previewable: false },
+    ruby:       { label: 'Ruby',       ext: 'rb', color: '#cc342d', previewable: false },
+    yaml:       { label: 'YAML',       ext: 'yml', color: '#f43f5e', previewable: false },
+    markdown:   { label: 'Markdown',   ext: 'md', color: '#94a3b8', previewable: false },
+    text:       { label: 'Plain Text', ext: 'txt', color: '#64748b', previewable: false }
+  };
+
+  function getLanguageMeta(lang) {
+    const key = (lang || 'text').toLowerCase();
+    return LANG_META[key] || { label: key.toUpperCase(), ext: 'txt', color: '#64748b', previewable: false };
+  }
 
   function escapeHtml(str) {
-    return String(str || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   function sanitizeUrl(url) {
-    const trimmed = String(url || "").trim();
-    if (/^(https?:|mailto:|#)/i.test(trimmed)) return trimmed;
-    return "#";
+    const trimmed = (url || '').trim();
+    if (/^(https?:|mailto:|#|\/)/i.test(trimmed)) return trimmed;
+    return '#';
   }
 
   function formatBytes(bytes) {
-    if (bytes < 1024) return bytes + " B";
-    return (bytes / 1024).toFixed(1) + " KB";
+    if (bytes < 1024) return `${bytes} B`;
+    return `${(bytes / 1024).toFixed(1)} KB`;
   }
 
-  const LANG_COLORS = {
-    javascript: "#facc15", typescript: "#38bdf8", python: "#3b82f6",
-    html: "#f97316", svg: "#fb923c", css: "#a855f7", json: "#10b981",
-    bash: "#22c55e", sql: "#06b6d4", rust: "#ea580c", go: "#0ea5e9",
-    java: "#ef4444", cpp: "#6366f1", csharp: "#8b5cf6", php: "#818cf8",
-    yaml: "#ec4899", markdown: "#94a3b8", plaintext: "#64748b"
-  };
-
-  /* ---------------------------------------------------------
-     1. Bug-Free Single-Pass Syntax Tokenizer (Zero Tag Corruption)
-     --------------------------------------------------------- */
+  /* =========================================================
+     SINGLE-PASS SYNTAX HIGHLIGHTER (ZERO HTML CORRUPTION)
+     ========================================================= */
   const KEYWORDS_BY_LANG = {
-    javascript: /^(?:const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|new|this|class|extends|super|import|export|default|from|async|await|try|catch|finally|throw|typeof|instanceof|in|of|null|undefined|true|false|void|delete|yield)$/,
-    typescript: /^(?:const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|new|this|class|extends|implements|interface|type|enum|namespace|public|private|protected|readonly|import|export|default|from|async|await|try|catch|finally|throw|typeof|keyof|as|null|undefined|true|false|string|number|boolean|any|unknown|void|never)$/,
-    python: /^(?:def|class|return|if|elif|else|for|while|break|continue|pass|import|from|as|try|except|finally|raise|with|lambda|yield|global|nonlocal|assert|del|in|is|not|and|or|None|True|False|async|await|self)$/,
-    sql: /^(?:SELECT|FROM|WHERE|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|TABLE|ALTER|DROP|JOIN|INNER|LEFT|RIGHT|OUTER|ON|GROUP|BY|ORDER|ASC|DESC|HAVING|LIMIT|OFFSET|AS|AND|OR|NOT|NULL|PRIMARY|KEY|FOREIGN|REFERENCES|DISTINCT|UNION|ALL|CASE|WHEN|THEN|ELSE|END|COUNT|SUM|AVG|MIN|MAX)$/i,
-    bash: /^(?:if|then|else|elif|fi|for|in|do|done|while|case|esac|function|export|local|return|echo|cd|ls|mkdir|rm|cp|mv|cat|grep|sed|awk|curl|git|npm|npx|node|python|pip|docker|sudo|chmod|exit|true|false)$/,
-    clike: /^(?:int|float|double|char|void|bool|boolean|byte|short|long|string|String|auto|const|static|final|public|private|protected|class|struct|enum|interface|extends|implements|new|this|super|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|using|namespace|package|import|include|fn|let|mut|pub|impl|trait|match|mod|use|func|defer|go|chan|map|range|nil|null|nullptr|true|false)$/
+    js: new Set(['async','await','break','case','catch','class','const','continue','debugger','default','delete','do','else','export','extends','false','finally','for','from','function','if','import','in','instanceof','let','new','null','of','return','static','super','switch','this','throw','true','try','typeof','undefined','var','void','while','yield','interface','type','enum','implements','private','public','protected','readonly']),
+    py: new Set(['False','None','True','and','as','assert','async','await','break','class','continue','def','del','elif','else','except','finally','for','from','global','if','import','in','is','lambda','nonlocal','not','or','pass','raise','return','try','while','with','yield','match','case']),
+    sql: new Set(['SELECT','FROM','WHERE','INSERT','INTO','VALUES','UPDATE','SET','DELETE','CREATE','TABLE','ALTER','DROP','JOIN','INNER','LEFT','RIGHT','OUTER','ON','GROUP','BY','ORDER','ASC','DESC','LIMIT','OFFSET','AS','AND','OR','NOT','NULL','IS','IN','LIKE','DISTINCT','HAVING','UNION','ALL','CASE','WHEN','THEN','ELSE','END','PRIMARY','KEY','FOREIGN','REFERENCES','INDEX','WITH']),
+    bash: new Set(['if','then','else','elif','fi','for','in','do','done','while','case','esac','function','return','export','local','echo','printf','cd','ls','grep','awk','sed','curl','git','npm','yarn','pnpm','python','python3','pip','docker','sudo','chmod','mkdir','rm','cp','mv','cat','exit']),
+    c: new Set(['auto','break','case','char','const','continue','default','do','double','else','enum','extern','float','for','goto','if','int','long','register','return','short','signed','sizeof','static','struct','switch','typedef','union','unsigned','void','volatile','while','class','public','private','protected','namespace','using','template','typename','virtual','override','bool','true','false','nullptr','new','delete','try','catch','throw','fn','let','mut','pub','impl','trait','match','use','mod','func','package','go','defer','chan','range','var','string','interface','extends','implements','final','abstract','synchronized','echo','foreach','require','include'])
   };
 
-  function highlightLine(rawLine, lang) {
-    const norm = global.FixerParser ? global.FixerParser.normalizeLang(lang) : (lang || "plaintext");
-
-    if (norm === "html" || norm === "xml" || norm === "svg") {
-      return highlightMarkupLine(rawLine);
-    }
-    if (norm === "css" || norm === "scss") {
-      return highlightCssLine(rawLine);
-    }
-    if (norm === "json") {
-      return highlightJsonLine(rawLine);
-    }
-
-    const kwSet =
-      KEYWORDS_BY_LANG[norm] ||
-      (["java", "cpp", "c", "csharp", "rust", "go", "php"].includes(norm) ? KEYWORDS_BY_LANG.clike : KEYWORDS_BY_LANG.javascript);
-
-    const hashComment = norm === "python" || norm === "bash" || norm === "yaml" || norm === "ruby";
-    const dashComment = norm === "sql";
-
-    let out = "";
-    let i = 0;
-    const len = rawLine.length;
-
-    while (i < len) {
-      const ch = rawLine[i];
-      const two = rawLine.slice(i, i + 2);
-
-      // Single-line comments
-      if ((!hashComment && two === "//") || (hashComment && ch === "#") || (dashComment && two === "--")) {
-        out += '<span class="syn-com">' + escapeHtml(rawLine.slice(i)) + "</span>";
-        break;
-      }
-
-      // Block comment inline /* ... */
-      if (two === "/*") {
-        const end = rawLine.indexOf("*/", i + 2);
-        const slice = end === -1 ? rawLine.slice(i) : rawLine.slice(i, end + 2);
-        out += '<span class="syn-com">' + escapeHtml(slice) + "</span>";
-        i += slice.length;
-        continue;
-      }
-
-      // Strings ("...", '...', `...`)
-      if (ch === '"' || ch === "'" || ch === "`") {
-        let j = i + 1;
-        while (j < len) {
-          if (rawLine[j] === "\\") { j += 2; continue; }
-          if (rawLine[j] === ch) { j++; break; }
-          j++;
-        }
-        out += '<span class="syn-str">' + escapeHtml(rawLine.slice(i, j)) + "</span>";
-        i = j;
-        continue;
-      }
-
-      // Numbers
-      if (/\d/.test(ch) && (i === 0 || !/[a-zA-Z0-9_$]/.test(rawLine[i - 1]))) {
-        let j = i;
-        while (j < len && /[0-9a-fA-FxXoObB._]/.test(rawLine[j])) j++;
-        out += '<span class="syn-num">' + escapeHtml(rawLine.slice(i, j)) + "</span>";
-        i = j;
-        continue;
-      }
-
-      // Identifiers / Keywords / Function calls / Types
-      if (/[a-zA-Z_$]/.test(ch)) {
-        let j = i;
-        while (j < len && /[a-zA-Z0-9_$]/.test(rawLine[j])) j++;
-        const word = rawLine.slice(i, j);
-        const nextNonSpace = rawLine.slice(j).match(/^\s*\(/);
-        if (kwSet.test(word)) {
-          out += '<span class="syn-kw">' + escapeHtml(word) + "</span>";
-        } else if (nextNonSpace) {
-          out += '<span class="syn-fn">' + escapeHtml(word) + "</span>";
-        } else if (/^[A-Z][a-zA-Z0-9_]*$/.test(word) && word.length > 1) {
-          out += '<span class="syn-type">' + escapeHtml(word) + "</span>";
-        } else {
-          out += escapeHtml(word);
-        }
-        i = j;
-        continue;
-      }
-
-      out += escapeHtml(ch);
-      i++;
-    }
-
-    return out || " ";
+  function wrapToken(cls, text) {
+    if (!cls) return escapeHtml(text);
+    return `<span class="syn-${cls}">${escapeHtml(text)}</span>`;
   }
 
-  function highlightMarkupLine(line) {
-    let out = "";
-    let i = 0;
-    const len = line.length;
-    while (i < len) {
-      if (line.startsWith("<!--", i)) {
-        const end = line.indexOf("-->", i + 4);
-        const slice = end === -1 ? line.slice(i) : line.slice(i, end + 3);
-        out += '<span class="syn-com">' + escapeHtml(slice) + "</span>";
-        i += slice.length;
-        continue;
-      }
-      if (line[i] === "<") {
-        const end = line.indexOf(">", i + 1);
-        const slice = end === -1 ? line.slice(i) : line.slice(i, end + 1);
-        out += highlightHtmlTag(slice);
-        i += slice.length;
-        continue;
-      }
-      const next = line.indexOf("<", i);
-      const textChunk = next === -1 ? line.slice(i) : line.slice(i, next);
-      out += escapeHtml(textChunk);
-      i += textChunk.length;
-    }
-    return out || " ";
+  function highlightLineOrCode(code, lang) {
+    const l = (lang || 'text').toLowerCase();
+    if (!code || l === 'text') return escapeHtml(code || '');
+    if (l === 'html' || l === 'xml' || l === 'svg') return tokenizeHtml(code);
+    if (l === 'css' || l === 'scss') return tokenizeCss(code);
+    if (l === 'json') return tokenizeJson(code);
+    if (l === 'sql') return tokenizeSql(code);
+    if (l === 'bash' || l === 'sh' || l === 'shell') return tokenizeBash(code);
+    if (l === 'python') return tokenizePython(code);
+    if (l === 'yaml') return tokenizeYaml(code);
+    return tokenizeCFamily(code, l);
   }
 
-  function highlightHtmlTag(tag) {
-    // Parse single <tag attr="val"> safely
-    let out = "";
-    const m = tag.match(/^(<\/?[\w:!-]+)([\s\S]*?)(\/?>?)$/);
-    if (!m) return escapeHtml(tag);
-    out += '<span class="syn-tag">' + escapeHtml(m[1]) + "</span>";
-    const attrs = m[2];
-    let i = 0;
-    while (i < attrs.length) {
-      if (attrs[i] === '"' || attrs[i] === "'") {
-        const q = attrs[i];
-        let j = i + 1;
-        while (j < attrs.length && attrs[j] !== q) j++;
-        if (j < attrs.length) j++;
-        out += '<span class="syn-str">' + escapeHtml(attrs.slice(i, j)) + "</span>";
-        i = j;
-        continue;
-      }
-      const am = attrs.slice(i).match(/^([a-zA-Z_:][\w:.-]*)(?=\s*=)/);
-      if (am) {
-        out += '<span class="syn-attr">' + escapeHtml(am[1]) + "</span>";
-        i += am[1].length;
-        continue;
-      }
-      out += escapeHtml(attrs[i]);
-      i++;
+  function tokenizeHtml(src) {
+    const re = /(<!--[\s\S]*?-->)|(<!DOCTYPE[^>]*>)|(<\/?[a-zA-Z][\w:-]*)|(\/?>)|(\s+[a-zA-Z_:][\w:.-]*(?=\s*=))|("[^"]*"|'[^']*')/g;
+    let out = '', last = 0, m;
+    while ((m = re.exec(src)) !== null) {
+      if (m.index > last) out += escapeHtml(src.slice(last, m.index));
+      if (m[1]) out += wrapToken('com', m[1]);
+      else if (m[2]) out += wrapToken('kw', m[2]);
+      else if (m[3]) out += wrapToken('tag', m[3]);
+      else if (m[4]) out += wrapToken('tag', m[4]);
+      else if (m[5]) out += wrapToken('attr', m[5]);
+      else if (m[6]) out += wrapToken('str', m[6]);
+      last = re.lastIndex;
     }
-    out += '<span class="syn-tag">' + escapeHtml(m[3]) + "</span>";
+    if (last < src.length) out += escapeHtml(src.slice(last));
     return out;
   }
 
-  function highlightCssLine(line) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("/*") || trimmed.startsWith("*")) {
-      return '<span class="syn-com">' + escapeHtml(line) + "</span>";
+  function tokenizeCss(src) {
+    const re = /(\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|(@[a-zA-Z-]+)|(--[a-zA-Z0-9-]+)|([a-zA-Z-]+(?=\s*:))|(#[0-9a-fA-F]{3,8}\b|\b\d+(?:\.\d+)?(?:px|rem|em|vh|vw|dvh|%|s|ms|deg|ch)?\b)/g;
+    let out = '', last = 0, m;
+    while ((m = re.exec(src)) !== null) {
+      if (m.index > last) out += escapeHtml(src.slice(last, m.index));
+      if (m[1]) out += wrapToken('com', m[1]);
+      else if (m[2]) out += wrapToken('str', m[2]);
+      else if (m[3]) out += wrapToken('kw', m[3]);
+      else if (m[4]) out += wrapToken('type', m[4]);
+      else if (m[5]) out += wrapToken('attr', m[5]);
+      else if (m[6]) out += wrapToken('num', m[6]);
+      last = re.lastIndex;
     }
-    const propMatch = line.match(/^(\s*)([\w-]+)(\s*:\s*)(.*)$/);
-    if (propMatch && !line.includes("{")) {
-      const val = propMatch[4].replace(/(#[0-9a-fA-F]{3,8}|\b\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|dvh|ch|s|ms|deg)?\b)/g, function (m) {
-        return "\uE010" + m + "\uE011";
-      });
-      const escapedVal = escapeHtml(val)
-        .replace(/\uE010(.*?)\uE011/g, '<span class="syn-num">$1</span>');
-      return escapeHtml(propMatch[1]) +
-        '<span class="syn-attr">' + escapeHtml(propMatch[2]) + "</span>" +
-        escapeHtml(propMatch[3]) + escapedVal;
-    }
-    if (line.includes("{") || trimmed.startsWith("@")) {
-      return '<span class="syn-tag">' + escapeHtml(line) + "</span>";
-    }
-    return escapeHtml(line) || " ";
+    if (last < src.length) out += escapeHtml(src.slice(last));
+    return out;
   }
 
-  function highlightJsonLine(line) {
-    let out = "";
-    let i = 0;
-    const len = line.length;
-    while (i < len) {
-      if (line[i] === '"') {
-        let j = i + 1;
-        while (j < len) {
-          if (line[j] === "\\") { j += 2; continue; }
-          if (line[j] === '"') { j++; break; }
-          j++;
+  function tokenizeJson(src) {
+    const re = /("(?:\\.|[^"\\])*")(\s*:)|("(?:\\.|[^"\\])*")|(\b(?:true|false|null)\b)|(-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)/g;
+    let out = '', last = 0, m;
+    while ((m = re.exec(src)) !== null) {
+      if (m.index > last) out += escapeHtml(src.slice(last, m.index));
+      if (m[1]) out += wrapToken('attr', m[1]) + escapeHtml(m[2]);
+      else if (m[3]) out += wrapToken('str', m[3]);
+      else if (m[4]) out += wrapToken('kw', m[4]);
+      else if (m[5]) out += wrapToken('num', m[5]);
+      last = re.lastIndex;
+    }
+    if (last < src.length) out += escapeHtml(src.slice(last));
+    return out;
+  }
+
+  function tokenizeSql(src) {
+    const re = /(--[^\n]*|\/\*[\s\S]*?\*\/)|('(?:''|[^'])*'|"(?:\\.|[^"\\])*")|(\b\d+(?:\.\d+)?\b)|(\b[A-Za-z_]\w*\b)/g;
+    let out = '', last = 0, m;
+    while ((m = re.exec(src)) !== null) {
+      if (m.index > last) out += escapeHtml(src.slice(last, m.index));
+      if (m[1]) out += wrapToken('com', m[1]);
+      else if (m[2]) out += wrapToken('str', m[2]);
+      else if (m[3]) out += wrapToken('num', m[3]);
+      else if (m[4]) {
+        const up = m[4].toUpperCase();
+        out += KEYWORDS_BY_LANG.sql.has(up) ? wrapToken('kw', m[4]) : escapeHtml(m[4]);
+      }
+      last = re.lastIndex;
+    }
+    if (last < src.length) out += escapeHtml(src.slice(last));
+    return out;
+  }
+
+  function tokenizeBash(src) {
+    const re = /(#[^\n]*)|("(?:\\.|[^"\\])*"|'[^']*')|(\$\{?[\w@*#?-]+\}?)|(\s--?[a-zA-Z0-9-]+)|(\b[a-zA-Z_][\w-]*\b)/g;
+    let out = '', last = 0, m;
+    while ((m = re.exec(src)) !== null) {
+      if (m.index > last) out += escapeHtml(src.slice(last, m.index));
+      if (m[1]) out += wrapToken('com', m[1]);
+      else if (m[2]) out += wrapToken('str', m[2]);
+      else if (m[3]) out += wrapToken('type', m[3]);
+      else if (m[4]) out += wrapToken('attr', m[4]);
+      else if (m[5]) {
+        out += KEYWORDS_BY_LANG.bash.has(m[5]) ? wrapToken('kw', m[5]) : escapeHtml(m[5]);
+      }
+      last = re.lastIndex;
+    }
+    if (last < src.length) out += escapeHtml(src.slice(last));
+    return out;
+  }
+
+  function tokenizePython(src) {
+    const re = /(#[^\n]*)|("""[\s\S]*?"""|'''[\s\S]*?'''|f?"(?:\\.|[^"\\])*"|f?'(?:\\.|[^'\\])*')|(@[a-zA-Z_][\w.]*)|(\b\d+(?:\.\d+)?\b)|(\b[A-Za-z_]\w*\b)(?=\s*\()|(\b[A-Za-z_]\w*\b)/g;
+    let out = '', last = 0, m;
+    while ((m = re.exec(src)) !== null) {
+      if (m.index > last) out += escapeHtml(src.slice(last, m.index));
+      if (m[1]) out += wrapToken('com', m[1]);
+      else if (m[2]) out += wrapToken('str', m[2]);
+      else if (m[3]) out += wrapToken('attr', m[3]);
+      else if (m[4]) out += wrapToken('num', m[4]);
+      else if (m[5]) {
+        out += KEYWORDS_BY_LANG.py.has(m[5]) ? wrapToken('kw', m[5]) : wrapToken('fn', m[5]);
+      } else if (m[6]) {
+        if (KEYWORDS_BY_LANG.py.has(m[6])) out += wrapToken('kw', m[6]);
+        else if (/^[A-Z][A-Za-z0-9_]*$/.test(m[6])) out += wrapToken('type', m[6]);
+        else out += escapeHtml(m[6]);
+      }
+      last = re.lastIndex;
+    }
+    if (last < src.length) out += escapeHtml(src.slice(last));
+    return out;
+  }
+
+  function tokenizeYaml(src) {
+    const re = /(#[^\n]*)|^(\s*[\w.-]+)(:)|("(?:\\.|[^"\\])*"|'[^']*')|(\b(?:true|false|null|yes|no)\b)|(\b\d+(?:\.\d+)?\b)/gm;
+    let out = '', last = 0, m;
+    while ((m = re.exec(src)) !== null) {
+      if (m.index > last) out += escapeHtml(src.slice(last, m.index));
+      if (m[1]) out += wrapToken('com', m[1]);
+      else if (m[2]) out += wrapToken('attr', m[2]) + escapeHtml(m[3]);
+      else if (m[4]) out += wrapToken('str', m[4]);
+      else if (m[5]) out += wrapToken('kw', m[5]);
+      else if (m[6]) out += wrapToken('num', m[6]);
+      last = re.lastIndex;
+    }
+    if (last < src.length) out += escapeHtml(src.slice(last));
+    return out;
+  }
+
+  function tokenizeCFamily(src, lang) {
+    const kwSet = (lang === 'javascript' || lang === 'typescript') ? KEYWORDS_BY_LANG.js : KEYWORDS_BY_LANG.c;
+    const re = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|(`(?:\\.|[^`\\])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|(\b0x[0-9a-fA-F]+\b|\b\d+(?:\.\d+)?\b)|(\b[A-Za-z_$][\w$]*\b)(?=\s*\()|(\b[A-Za-z_$][\w$]*\b)/g;
+    let out = '', last = 0, m;
+    while ((m = re.exec(src)) !== null) {
+      if (m.index > last) out += escapeHtml(src.slice(last, m.index));
+      if (m[1]) out += wrapToken('com', m[1]);
+      else if (m[2]) out += wrapToken('str', m[2]);
+      else if (m[3]) out += wrapToken('num', m[3]);
+      else if (m[4]) {
+        out += kwSet.has(m[4]) ? wrapToken('kw', m[4]) : wrapToken('fn', m[4]);
+      } else if (m[5]) {
+        if (kwSet.has(m[5])) out += wrapToken('kw', m[5]);
+        else if (/^[A-Z][A-Za-z0-9_]*$/.test(m[5]) && m[5].length > 1) out += wrapToken('type', m[5]);
+        else out += escapeHtml(m[5]);
+      }
+      last = re.lastIndex;
+    }
+    if (last < src.length) out += escapeHtml(src.slice(last));
+    return out;
+  }
+
+  /**
+   * Split highlighted HTML cleanly by newline while balancing open <span> tags across multiline tokens (e.g., /* comments *\/)
+   */
+  function splitHighlightedLines(highlightedHtml) {
+    const rawLines = highlightedHtml.split('\n');
+    const result = [];
+    let openSpanClass = null;
+
+    for (let i = 0; i < rawLines.length; i++) {
+      let line = rawLines[i];
+      if (openSpanClass) {
+        line = `<span class="${openSpanClass}">` + line;
+      }
+
+      // Track open/close spans on this line
+      const tagRe = /<span class="([^"]+)">|<\/span>/g;
+      let m;
+      let depth = openSpanClass ? 1 : 0;
+      let currentCls = openSpanClass;
+      while ((m = tagRe.exec(rawLines[i])) !== null) {
+        if (m[1]) {
+          depth++;
+          currentCls = m[1];
+        } else {
+          depth = Math.max(0, depth - 1);
+          if (depth === 0) currentCls = null;
         }
-        const token = line.slice(i, j);
-        const isKey = /^\s*:/.test(line.slice(j));
-        out += '<span class="' + (isKey ? "syn-attr" : "syn-str") + '">' + escapeHtml(token) + "</span>";
-        i = j;
-        continue;
       }
-      const nm = line.slice(i).match(/^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/);
-      if (nm) {
-        out += '<span class="syn-num">' + escapeHtml(nm[0]) + "</span>";
-        i += nm[0].length;
-        continue;
+
+      if (depth > 0 && currentCls) {
+        line += '</span>';
+        openSpanClass = currentCls;
+      } else {
+        openSpanClass = null;
       }
-      const bm = line.slice(i).match(/^(?:true|false|null)\b/);
-      if (bm) {
-        out += '<span class="syn-kw">' + escapeHtml(bm[0]) + "</span>";
-        i += bm[0].length;
-        continue;
-      }
-      out += escapeHtml(line[i]);
-      i++;
+      result.push(line || ' ');
     }
-    return out || " ";
+    return result;
   }
 
-  /* ---------------------------------------------------------
-     2. Interactive Code Card Builder
-     --------------------------------------------------------- */
-  function buildCodeCardHtml(block, options) {
-    const opts = options || {};
-    const showLines = opts.showLineNumbers !== false;
-    const wrapAll = !!opts.wrapLines;
-    const lines = (block.code || "").split("\n");
-    const langColor = LANG_COLORS[block.lang] || "#3b82f6";
-    const isPreviewable = ["html", "svg"].includes(block.lang);
-    const isJson = block.lang === "json";
+  /* =========================================================
+     IDE CODE CARD COMPONENT
+     ========================================================= */
+  function renderCodeCard(block, options) {
+    const opts = Object.assign({
+      showLineNumbers: true,
+      wrapLines: false,
+      collapsed: false,
+      showJump: false,
+      inFocusModal: false
+    }, options || {});
 
-    const gutterHtml = lines.map(function (_, idx) {
-      return '<span class="ln" data-line="' + (idx + 1) + '">' + (idx + 1) + "</span>";
-    }).join("");
+    const meta = getLanguageMeta(block.lang);
+    const highlighted = highlightLineOrCode(block.code, block.lang);
+    const linesHtml = splitHighlightedLines(highlighted);
 
-    const codeLinesHtml = lines.map(function (line, idx) {
-      return '<span class="code-line" data-line="' + (idx + 1) + '">' + highlightLine(line, block.lang) + "</span>";
-    }).join("");
+    const cardClasses = [
+      'code-card',
+      opts.collapsed ? 'collapsed' : '',
+      opts.wrapLines ? 'wrap-lines' : '',
+      !opts.showLineNumbers ? 'hide-line-nums' : ''
+    ].filter(Boolean).join(' ');
 
-    const cardIdAttr = opts.cardPrefix ? (opts.cardPrefix + block.index) : block.id;
+    const rowsHtml = linesHtml.map((lineHtml, idx) => {
+      const ln = idx + 1;
+      return `<tr class="code-line-row" data-line="${ln}"><td class="code-ln-cell" data-action="highlight-line" data-line="${ln}" title="Klik untuk sorot baris ${ln}">${ln}</td><td class="code-src-cell">${lineHtml}</td></tr>`;
+    }).join('');
 
-    return (
-      '<div class="code-card' + (wrapAll ? " wrap-lines" : "") + '" id="' + escapeHtml(cardIdAttr) + '" data-code-index="' + block.index + '">' +
-        '<div class="code-card-header">' +
-          '<div class="code-card-left">' +
-            '<button class="code-collapse-btn" type="button" data-code-action="collapse" title="Lipat / Buka Blok">&#9662;</button>' +
-            '<span class="code-lang-dot" style="background:' + langColor + '"></span>' +
-            '<span class="code-lang">' + escapeHtml(block.lang) + "</span>" +
-            '<span class="code-filename" title="' + escapeHtml(block.filename) + '">' + escapeHtml(block.filename) + "</span>" +
-            '<span class="code-meta-badge">' + block.lines + " baris &bull; " + formatBytes(block.bytes) + "</span>" +
-          "</div>" +
-          '<div class="code-card-actions">' +
-            (isPreviewable ? '<button class="btn btn-sm btn-accent-soft" type="button" data-code-action="preview" title="Jalankan Pratinjau Langsung (Sandbox)">Preview</button>' : "") +
-            (isJson ? '<button class="btn btn-sm" type="button" data-code-action="format-json" title="Rapikan Format JSON">Beautify</button>' : "") +
-            '<button class="btn btn-sm" type="button" data-code-action="wrap" title="Toggle Word Wrap">Wrap</button>' +
-            (opts.showJump ? '<button class="btn btn-sm" type="button" data-code-action="jump" title="Lompat ke posisi di Preview">Jump</button>' : "") +
-            '<button class="btn btn-sm" type="button" data-code-action="focus" title="Lihat Penuh (Zen Mode)">Focus</button>' +
-            '<button class="btn btn-sm" type="button" data-code-action="download" title="Unduh File Kode">Save</button>' +
-            '<button class="btn btn-sm btn-primary" type="button" data-code-action="copy">Copy</button>' +
-          "</div>" +
-        "</div>" +
-        '<div class="code-body">' +
-          '<div class="code-gutter' + (showLines ? "" : " hidden") + '">' + gutterHtml + "</div>" +
-          "<pre><code>" + codeLinesHtml + "</code></pre>" +
-        "</div>" +
-      "</div>"
-    );
+    const filenameBadge = block.filename
+      ? `<span class="code-filename" title="File terdeteksi">${escapeHtml(block.filename)}</span>`
+      : '';
+
+    const autoCloseBadge = block.autoClosed
+      ? `<span class="code-meta-badge auto-closed" title="Fence ditutup otomatis karena terpotong">Auto-Closed</span>`
+      : '';
+
+    const previewBtn = meta.previewable && !opts.inFocusModal
+      ? `<button type="button" class="btn btn-xs btn-accent-soft" data-action="live-code" data-code-idx="${block.index}" title="Jalankan Live Preview di Sandbox">Live Preview</button>`
+      : '';
+
+    const focusBtn = !opts.inFocusModal
+      ? `<button type="button" class="btn btn-xs" data-action="focus-code" data-code-idx="${block.index}" title="Buka di Code Focus Fullscreen">Focus</button>`
+      : '';
+
+    const jumpBtn = opts.showJump
+      ? `<button type="button" class="btn btn-xs" data-action="jump-code" data-code-idx="${block.index}" title="Lompat ke posisi di Preview">Jump</button>`
+      : '';
+
+    const headerHtml = opts.inFocusModal ? '' : `
+      <div class="code-card-header">
+        <div class="code-card-left">
+          <button type="button" class="code-collapse-btn" data-action="toggle-collapse" data-code-idx="${block.index}" title="Expand / Collapse">&#9662;</button>
+          <span class="lang-dot" style="background:${meta.color}"></span>
+          <span class="code-lang">${escapeHtml(meta.label)}</span>
+          ${filenameBadge}
+          <span class="code-meta-badge">${block.lines} baris &middot; ${formatBytes(block.bytes)}</span>
+          ${autoCloseBadge}
+        </div>
+        <div class="code-card-actions">
+          ${previewBtn}
+          ${jumpBtn}
+          <button type="button" class="btn btn-xs ${opts.wrapLines ? 'active-toggle' : ''}" data-action="toggle-wrap" title="Wrap baris panjang">Wrap</button>
+          ${focusBtn}
+          <button type="button" class="btn btn-xs" data-action="download-code" data-code-idx="${block.index}" title="Unduh sebagai .${meta.ext}">.${meta.ext}</button>
+          <button type="button" class="btn btn-xs btn-primary" data-action="copy-code" data-code-idx="${block.index}">Copy</button>
+        </div>
+      </div>`;
+
+    return `
+      <div class="${cardClasses}" data-code-card="${block.index}" id="code-block-${block.index}">
+        ${headerHtml}
+        <div class="code-body">
+          <table class="code-lines-table"><tbody>${rowsHtml}</tbody></table>
+        </div>
+      </div>`;
   }
 
-  /* ---------------------------------------------------------
-     3. Offline LaTeX Math Renderer
-     --------------------------------------------------------- */
-  const LATEX_SYMBOLS = {
-    "\\alpha": "α", "\\beta": "β", "\\gamma": "γ", "\\delta": "δ", "\\epsilon": "ε", "\\varepsilon": "ε",
-    "\\zeta": "ζ", "\\eta": "η", "\\theta": "θ", "\\lambda": "λ", "\\mu": "μ", "\\nu": "ν", "\\xi": "ξ",
-    "\\pi": "π", "\\rho": "ρ", "\\sigma": "σ", "\\tau": "τ", "\\phi": "φ", "\\varphi": "φ", "\\chi": "χ",
-    "\\psi": "ψ", "\\omega": "ω", "\\Gamma": "Γ", "\\Delta": "Δ", "\\Theta": "Θ", "\\Lambda": "Λ",
-    "\\Pi": "Π", "\\Sigma": "Σ", "\\Phi": "Φ", "\\Psi": "Ψ", "\\Omega": "Ω",
-    "\\infty": "∞", "\\pm": "±", "\\mp": "∓", "\\times": "×", "\\cdot": "·", "\\div": "÷",
-    "\\neq": "≠", "\\ne": "≠", "\\leq": "≤", "\\le": "≤", "\\geq": "≥", "\\ge": "≥",
-    "\\approx": "≈", "\\equiv": "≡", "\\sim": "∼", "\\propto": "∝",
-    "\\sum": "∑", "\\prod": "∏", "\\int": "∫", "\\oint": "∮", "\\partial": "∂", "\\nabla": "∇",
-    "\\forall": "∀", "\\exists": "∃", "\\in": "∈", "\\notin": "∉", "\\subset": "⊂", "\\subseteq": "⊆",
-    "\\cup": "∪", "\\cap": "∩", "\\emptyset": "∅", "\\rightarrow": "→", "\\to": "→", "\\leftarrow": "←",
-    "\\Rightarrow": "⇒", "\\Leftarrow": "⇐", "\\Leftrightarrow": "⇔", "\\iff": "⇔",
-    "\\mathbb{R}": "ℝ", "\\mathbb{N}": "ℕ", "\\mathbb{Z}": "ℤ", "\\mathbb{Q}": "ℚ", "\\mathbb{C}": "ℂ",
-    "\\ldots": "…", "\\cdots": "⋯", "\\dots": "…", "\\degree": "°", "\\circ": "∘", "\\angle": "∠"
+  /* =========================================================
+     OFFLINE LATEX MATH RENDERER
+     ========================================================= */
+  const GREEK_AND_SYMBOLS = {
+    '\\alpha': 'α', '\\beta': 'β', '\\gamma': 'γ', '\\delta': 'δ', '\\epsilon': 'ε', '\\varepsilon': 'ε',
+    '\\zeta': 'ζ', '\\eta': 'η', '\\theta': 'θ', '\\iota': 'ι', '\\kappa': 'κ', '\\lambda': 'λ',
+    '\\mu': 'μ', '\\nu': 'ν', '\\xi': 'ξ', '\\pi': 'π', '\\rho': 'ρ', '\\sigma': 'σ',
+    '\\tau': 'τ', '\\upsilon': 'υ', '\\phi': 'φ', '\\varphi': 'φ', '\\chi': 'χ', '\\psi': 'ψ', '\\omega': 'ω',
+    '\\Gamma': 'Γ', '\\Delta': 'Δ', '\\Theta': 'Θ', '\\Lambda': 'Λ', '\\Xi': 'Ξ', '\\Pi': 'Π',
+    '\\Sigma': 'Σ', '\\Phi': 'Φ', '\\Psi': 'Ψ', '\\Omega': 'Ω',
+    '\\pm': '±', '\\mp': '∓', '\\times': '×', '\\div': '÷', '\\cdot': '·', '\\ast': '∗',
+    '\\leq': '≤', '\\le': '≤', '\\geq': '≥', '\\ge': '≥', '\\neq': '≠', '\\ne': '≠',
+    '\\approx': '≈', '\\equiv': '≡', '\\sim': '∼', '\\propto': '∝', '\\infty': '∞',
+    '\\to': '→', '\\rightarrow': '→', '\\leftarrow': '←', '\\leftrightarrow': '↔',
+    '\\Rightarrow': '⇒', '\\Leftarrow': '⇐', '\\Leftrightarrow': '⇔',
+    '\\sum': '∑', '\\prod': '∏', '\\int': '∫', '\\oint': '∮', '\\partial': '∂', '\\nabla': '∇',
+    '\\forall': '∀', '\\exists': '∃', '\\in': '∈', '\\notin': '∉', '\\subset': '⊂', '\\subseteq': '⊆',
+    '\\cup': '∪', '\\cap': '∩', '\\emptyset': '∅', '\\degree': '°', '\\dots': '…', '\\ldots': '…', '\\cdots': '⋯'
   };
 
-  function renderMath(tex, displayMode) {
-    let s = escapeHtml((tex || "").trim());
+  function renderMath(tex, isBlock) {
+    let s = escapeHtml((tex || '').trim());
 
     // Handle \text{...}, \mathrm{...}, \mathbf{...}
-    s = s.replace(/\\(?:text|mathrm)\{([^{}]+)\}/g, '<span style="font-style:normal">$1</span>');
-    s = s.replace(/\\mathbf\{([^{}]+)\}/g, "<strong>$1</strong>");
+    s = s.replace(/\\text\{([^{}]+)\}/g, '<span style="font-family:var(--font-sans)">$1</span>');
+    s = s.replace(/\\mathbf\{([^{}]+)\}/g, '<strong>$1</strong>');
 
-    // Handle \frac{a}{b} (up to 3 nested passes)
-    for (let p = 0; p < 3; p++) {
-      s = s.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '<span class="math-frac"><span class="math-frac-num">$1</span><span class="math-frac-den">$2</span></span>');
+    // Handle \frac{a}{b} (iteratively up to 3 nesting depths)
+    for (let pass = 0; pass < 3; pass++) {
+      s = s.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g,
+        '<span class="math-frac"><span class="math-frac-num">$1</span><span class="math-frac-den">$2</span></span>'
+      );
     }
 
     // Handle \sqrt{x}
     s = s.replace(/\\sqrt\{([^{}]+)\}/g, '<span class="math-sqrt">&radic;<span class="math-sqrt-rad">$1</span></span>');
 
-    // Superscripts & Subscripts
-    s = s.replace(/\^\{([^{}]+)\}/g, "<sup>$1</sup>");
-    s = s.replace(/\^([a-zA-Z0-9+-])/g, "<sup>$1</sup>");
-    s = s.replace(/_\{([^{}]+)\}/g, "<sub>$1</sub>");
-    s = s.replace(/_([a-zA-Z0-9+-])/g, "<sub>$1</sub>");
+    // Replace Greek letters & operators
+    s = s.replace(/\\[a-zA-Z]+/g, m => GREEK_AND_SYMBOLS[m] || m);
 
-    // Replace known symbols (longest keys first)
-    const keys = Object.keys(LATEX_SYMBOLS).sort(function (a, b) { return b.length - a.length; });
-    for (let k = 0; k < keys.length; k++) {
-      const sym = keys[k];
-      if (s.includes(sym)) {
-        s = s.split(sym).join(LATEX_SYMBOLS[sym]);
-      }
-    }
+    // Superscripts & subscripts
+    s = s.replace(/\^\{([^{}]+)\}/g, '<sup>$1</sup>');
+    s = s.replace(/\^([a-zA-Z0-9])/g, '<sup>$1</sup>');
+    s = s.replace(/_\{([^{}]+)\}/g, '<sub>$1</sub>');
+    s = s.replace(/_([a-zA-Z0-9])/g, '<sub>$1</sub>');
 
-    // Clean spacing commands
-    s = s.replace(/\\(?:left|right|quad|qquad|,|;|!)/g, " ");
+    // Cleanup leftover layout commands
+    s = s.replace(/\\left|\\right|\\,|\\;|\\!/g, ' ');
 
-    if (displayMode) {
-      return '<div class="math-block">' + s + "</div>";
-    }
-    return '<span class="math-inline">' + s + "</span>";
+    return isBlock
+      ? `<div class="math-block">${s}</div>`
+      : `<span class="math-inline">${s}</span>`;
   }
 
-  /* ---------------------------------------------------------
-     4. Full Block & Inline Markdown Renderer
-     --------------------------------------------------------- */
-  function renderInline(rawText) {
-    const tokens = [];
-    function stash(html) {
-      tokens.push(html);
-      return "\uE020" + (tokens.length - 1) + "\uE021";
-    }
+  /* =========================================================
+     SAFE INLINE MARKDOWN PARSER
+     ========================================================= */
+  function renderInline(rawText, options) {
+    const opts = options || {};
+    const stashed = [];
+    const stash = (html) => {
+      const k = `\u0000STASH${stashed.length}\u0000`;
+      stashed.push(html);
+      return k;
+    };
 
-    let text = String(rawText || "");
+    let s = rawText || '';
 
-    // 1. Inline code `...`
-    text = text.replace(/`([^`\n]+)`/g, function (_, code) {
-      return stash('<code class="inline-code">' + escapeHtml(code) + "</code>");
+    // 1. Stash inline code spans (multi-backtick safe) BEFORE HTML escaping
+    s = s.replace(/(`+)([^\n`]+?)\1/g, (_, ticks, code) => {
+      return stash(`<code class="inline-code">${escapeHtml(code)}</code>`);
     });
 
-    // 2. Inline Math $...$ (guard against currency like $5 and $10)
-    text = text.replace(/\$(?!\s)([^$\n]+?)(?<!\s)\$(?!\d)/g, function (match, expr) {
-      if (/^\d+(?:[.,]\d+)?\s+[a-zA-Z]/.test(expr) && !/[\\^_=+\-*/<>]/.test(expr)) {
-        return match;
-      }
-      return stash(renderMath(expr, false));
+    // 2. Stash inline LaTeX math $...$
+    s = s.replace(/(?<!\$)\$(?!\s)([^\n$]+?)(?<!\s)\$(?!\d)/g, (_, tex) => {
+      return stash(renderMath(tex, false));
     });
 
-    // 3. Escape remaining HTML safely
-    text = escapeHtml(text);
+    // 3. Escape all HTML safely
+    s = escapeHtml(s);
 
     // 4. Images ![alt](url)
-    text = text.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, function (_, alt, url) {
-      return stash('<img src="' + escapeHtml(sanitizeUrl(url)) + '" alt="' + alt + '" style="max-width:100%;border-radius:8px;">');
+    s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\)/g, (_, alt, url) => {
+      return stash(`<img src="${escapeHtml(sanitizeUrl(url))}" alt="${alt}" loading="lazy">`);
     });
 
-    // 5. Links [label](url)
-    text = text.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (_, label, url) {
+    // 5. Links [text](url)
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\)/g, (_, label, url) => {
       const safe = sanitizeUrl(url);
-      const ext = safe.startsWith("http") ? ' target="_blank" rel="noopener noreferrer"' : "";
-      return stash('<a href="' + escapeHtml(safe) + '"' + ext + ">" + label + "</a>");
+      const extAttr = safe.startsWith('http') ? ' target="_blank" rel="noopener noreferrer"' : '';
+      return stash(`<a href="${escapeHtml(safe)}"${extAttr}>${label}</a>`);
     });
 
-    // 6. Highlight ==text==
-    text = text.replace(/==([^=\n]+)==/g, "<mark>$1</mark>");
-
-    // 7. Strikethrough ~~text~~
-    text = text.replace(/~~([^~\n]+)~~/g, "<del>$1</del>");
-
-    // 8. Bold + Italic ***text***
-    text = text.replace(/\*\*\*([^*\n]+)\*\*\*/g, "<strong><em>$1</em></strong>");
-
-    // 9. Bold **text** or __text__
-    text = text.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
-    text = text.replace(/__([^_\n]+)__/g, "<strong>$1</strong>");
-
-    // 10. Italic *text* or _text_
-    text = text.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
-    text = text.replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,!?:;]|$)/g, "$1<em>$2</em>");
-
-    // Restore stashed tokens
-    text = text.replace(/\uE020(\d+)\uE021/g, function (_, idx) {
-      return tokens[Number(idx)];
+    // 6. Bare URLs
+    s = s.replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, (_, pre, url) => {
+      return pre + stash(`<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
     });
 
-    return text;
-  }
+    // 7. Bold + Italic ***text***
+    s = s.replace(/\*\*\*([^*\n]+?)\*\*\*/g, '<strong><em>$1</em></strong>');
 
-  function renderMarkdown(markdown, metadata, options) {
-    const opts = options || {};
-    const md = markdown || "";
-    const meta = metadata || (global.FixerParser ? global.FixerParser.extractMetadata(md) : { headings: [], codeBlocks: [] });
-    const lines = md.split("\n");
-    const htmlParts = [];
+    // 8. Bold **text** and __text__ (safe with quotes & punctuation)
+    s = s.replace(/\*\*([^\n]+?)\*\*/g, (m, inner) => {
+      if (!inner.trim()) return m;
+      return `<strong>${inner}</strong>`;
+    });
+    s = s.replace(/(^|[^\w])__([^\n_]+?)__(?=[^\w]|$)/g, '$1<strong>$2</strong>');
 
-    let headingCursor = 0;
-    let codeCursor = 0;
-    let i = 0;
+    // 9. Italic *text* and boundary-safe _text_ (never corrupts snake_case_identifiers!)
+    s = s.replace(/(?<!\*)\*([^*\n]+?)\*(?!\*)/g, (m, inner) => {
+      if (!inner.trim()) return m;
+      return `<em>${inner}</em>`;
+    });
+    s = s.replace(/(^|[^\w])_([^_\n]+?)_(?=[^\w]|$)/g, '$1<em>$2</em>');
 
-    while (i < lines.length) {
-      const line = lines[i];
+    // 10. Strikethrough ~~text~~ & Highlight ==text==
+    s = s.replace(/~~([^~\n]+?)~~/g, '<del>$1</del>');
+    s = s.replace(/==([^=\n]+?)==/g, '<mark>$1</mark>');
 
-      // Skip blank lines
-      if (line.trim() === "") {
-        i++;
-        continue;
-      }
-
-      // 1. Fenced Code Block
-      if (/^[ \t]{0,3}`{3,}/.test(line)) {
-        i++;
-        while (i < lines.length && !/^[ \t]{0,3}`{3,}\s*$/.test(lines[i])) {
-          i++;
-        }
-        i++; // skip closing fence
-        const block = meta.codeBlocks[codeCursor++];
-        if (block) {
-          htmlParts.push(buildCodeCardHtml(block, opts));
-        }
-        continue;
-      }
-
-      // 2. Collapsible Thinking Block (:::thought ... :::)
-      if (/^:::thought\s*$/.test(line.trim())) {
-        i++;
-        const thoughtLines = [];
-        while (i < lines.length && lines[i].trim() !== ":::") {
-          thoughtLines.push(lines[i]);
-          i++;
-        }
-        i++; // skip closing :::
-        const innerHtml = thoughtLines.join("\n").split(/\n\n+/).map(function (p) {
-          return "<p>" + renderInline(p.replace(/\n/g, "<br>")) + "</p>";
-        }).join("");
-        htmlParts.push(
-          '<details class="thinking-block"><summary>AI Thinking / Reasoning Process</summary>' +
-          '<div class="thinking-content">' + innerHtml + "</div></details>"
-        );
-        continue;
-      }
-
-      // 3. Display Math Block $$ ... $$
-      if (/^\s*\$\$/.test(line)) {
-        const singleLine = line.trim().match(/^\$\$(.+)\$\$$/);
-        if (singleLine) {
-          htmlParts.push(renderMath(singleLine[1], true));
-          i++;
-          continue;
-        }
-        i++;
-        const mathLines = [];
-        while (i < lines.length && !/^\s*\$\$\s*$/.test(lines[i])) {
-          mathLines.push(lines[i]);
-          i++;
-        }
-        i++;
-        htmlParts.push(renderMath(mathLines.join("\n"), true));
-        continue;
-      }
-
-      // 4. Headings
-      const hMatch = line.match(/^(#{1,6})\s+(.+)$/);
-      if (hMatch) {
-        const lvl = hMatch[1].length;
-        const hMeta = meta.headings[headingCursor++];
-        const idAttr = hMeta ? ' id="' + escapeHtml((opts.headingPrefix || "") + hMeta.id) + '"' : "";
-        htmlParts.push("<h" + lvl + idAttr + ">" + renderInline(hMatch[2].trim()) + "</h" + lvl + ">");
-        i++;
-        continue;
-      }
-
-      // 5. Scene Break / Horizontal Rule
-      if (/^[ \t]*(?:[-*_][ \t]*){3,}$/.test(line)) {
-        if (opts.bookMode) {
-          htmlParts.push('<div class="scene-break" aria-hidden="true">&#10022; &nbsp; &#10022; &nbsp; &#10022;</div>');
-        } else {
-          htmlParts.push("<hr>");
-        }
-        i++;
-        continue;
-      }
-
-      // 6. Table
-      if (
-        i + 1 < lines.length &&
-        lines[i].includes("|") &&
-        /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(lines[i + 1])
-      ) {
-        const headCells = splitTableRow(lines[i]);
-        const aligns = splitTableRow(lines[i + 1]).map(function (c) {
-          if (c.startsWith(":") && c.endsWith(":")) return "center";
-          if (c.endsWith(":")) return "right";
-          return "left";
-        });
-        i += 2;
-        const bodyRows = [];
-        while (i < lines.length && lines[i].trim() !== "" && lines[i].includes("|")) {
-          bodyRows.push(splitTableRow(lines[i]));
-          i++;
-        }
-
-        let tHtml = "<table><thead><tr>";
-        headCells.forEach(function (cell, idx) {
-          tHtml += '<th style="text-align:' + (aligns[idx] || "left") + '">' + renderInline(cell) + "</th>";
-        });
-        tHtml += "</tr></thead><tbody>";
-        bodyRows.forEach(function (row) {
-          tHtml += "<tr>";
-          for (let c = 0; c < headCells.length; c++) {
-            tHtml += '<td style="text-align:' + (aligns[c] || "left") + '">' + renderInline(row[c] || "") + "</td>";
-          }
-          tHtml += "</tr>";
-        });
-        tHtml += "</tbody></table>";
-        htmlParts.push(tHtml);
-        continue;
-      }
-
-      // 7. Blockquotes & GitHub-Style Callouts ([!NOTE], [!TIP], [!WARNING], [!CAUTION])
-      if (/^\s*>\s?/.test(line)) {
-        const bqLines = [];
-        while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
-          bqLines.push(lines[i].replace(/^\s*>\s?/, ""));
-          i++;
-        }
-        const calloutMatch = bqLines[0].trim().match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]$/i);
-        if (calloutMatch) {
-          const kind = calloutMatch[1].toLowerCase();
-          const cssKind = kind === "important" ? "note" : kind;
-          const body = bqLines.slice(1).map(function (l) { return renderInline(l); }).join("<br>");
-          htmlParts.push(
-            '<div class="callout callout-' + cssKind + '">' +
-              '<div class="callout-title">' + escapeHtml(calloutMatch[1].toUpperCase()) + "</div>" +
-              "<div>" + body + "</div>" +
-            "</div>"
-          );
-        } else {
-          htmlParts.push("<blockquote><p>" + bqLines.map(renderInline).join("<br>") + "</p></blockquote>");
-        }
-        continue;
-      }
-
-      // 8. Unordered & Task Lists
-      if (/^[ \t]*[-*+]\s+/.test(line)) {
-        const items = [];
-        while (i < lines.length && /^[ \t]*[-*+]\s+/.test(lines[i])) {
-          const itemBody = lines[i].replace(/^[ \t]*[-*+]\s+/, "");
-          const taskMatch = itemBody.match(/^\[( |x|X)\]\s+(.*)$/);
-          if (taskMatch) {
-            const checked = taskMatch[1].toLowerCase() === "x" ? " checked" : "";
-            items.push('<li class="task-item"><input type="checkbox" disabled' + checked + "><span>" + renderInline(taskMatch[2]) + "</span></li>");
-          } else {
-            items.push("<li>" + renderInline(itemBody) + "</li>");
-          }
-          i++;
-        }
-        htmlParts.push("<ul>" + items.join("") + "</ul>");
-        continue;
-      }
-
-      // 9. Ordered Lists
-      if (/^[ \t]*\d+\.\s+/.test(line)) {
-        const items = [];
-        while (i < lines.length && /^[ \t]*\d+\.\s+/.test(lines[i])) {
-          const itemBody = lines[i].replace(/^[ \t]*\d+\.\s+/, "");
-          items.push("<li>" + renderInline(itemBody) + "</li>");
-          i++;
-        }
-        htmlParts.push("<ol>" + items.join("") + "</ol>");
-        continue;
-      }
-
-      // 10. Normal Paragraph
-      const pLines = [];
-      while (
-        i < lines.length &&
-        lines[i].trim() !== "" &&
-        !/^[ \t]{0,3}(`{3,}|#{1,6}\s+|>\s?|[-*+]\s+|\d+\.\s+|\$\$|:::thought|([-*_]\s*){3,}$)/.test(lines[i])
-      ) {
-        pLines.push(lines[i]);
-        i++;
-      }
-      if (pLines.length > 0) {
-        htmlParts.push("<p>" + pLines.map(renderInline).join("<br>") + "</p>");
-      }
+    // 11. Optional Literary Dialogue Highlighting (strictly walks text OUTSIDE HTML tags!)
+    if (opts.highlightDialogue) {
+      s = highlightDialogueOutsideTags(s);
     }
 
-    return htmlParts.join("\n");
-  }
-
-  function splitTableRow(row) {
-    let r = row.trim();
-    if (r.startsWith("|")) r = r.slice(1);
-    if (r.endsWith("|")) r = r.slice(0, -1);
-    return r.split("|").map(function (c) { return c.trim(); });
-  }
-
-  /* ---------------------------------------------------------
-     5. Book View DOM Enhancements (Dialogue Highlight & Bionic)
-     Applied ONLY to safe text nodes (never code or math!)
-     --------------------------------------------------------- */
-  function enhanceBookArticleDom(containerEl, opts) {
-    if (!containerEl) return;
-    if (!opts.dialogueHighlight && !opts.bionicReading) return;
-
-    const blocks = containerEl.querySelectorAll("p, li, blockquote");
-    blocks.forEach(function (blockEl) {
-      const walker = document.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT, {
-        acceptNode: function (node) {
-          if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
-          if (node.parentElement && node.parentElement.closest("code, pre, .code-card, .math-block, .math-inline, a, script, style")) {
-            return NodeFilter.FILTER_REJECT;
-          }
-          return NodeFilter.FILTER_ACCEPT;
-        }
-      });
-
-      const textNodes = [];
-      let current;
-      while ((current = walker.nextNode())) textNodes.push(current);
-
-      textNodes.forEach(function (tNode) {
-        let html = escapeHtml(tNode.nodeValue);
-
-        if (opts.dialogueHighlight) {
-          // Highlight straight "..." and curly “...” or «...» dialogue
-          html = html.replace(/(&quot;[^&]+?&quot;|“[^”]+?”|«[^»]+?»)/g, '<span class="dialogue-hl">$1</span>');
-        }
-
-        if (opts.bionicReading) {
-          // Bold the first ~40% of each word outside HTML tags
-          html = html.replace(/(<[^>]+>)|([A-Za-z\u00C0-\u024F]{2,})/g, function (match, tag, word) {
-            if (tag) return tag;
-            const splitAt = word.length <= 3 ? 1 : Math.ceil(word.length * 0.42);
-            return '<span class="bionic-b">' + word.slice(0, splitAt) + "</span>" + word.slice(splitAt);
-          });
-        }
-
-        const span = document.createElement("span");
-        span.innerHTML = html;
-        tNode.parentNode.replaceChild(span, tNode);
-      });
-    });
-  }
-
-  /* ---------------------------------------------------------
-     6. Diff View HTML Renderer
-     --------------------------------------------------------- */
-  function renderDiffHtml(ops, changesOnly) {
-    if (!ops || ops.length === 0) {
-      return '<div class="empty-state"><h3>Belum ada teks</h3><p>Masukkan teks mentah untuk melihat perbedaan sebelum &amp; sesudah perbaikan.</p></div>';
+    // 12. Restore stashed tokens
+    for (let i = stashed.length - 1; i >= 0; i--) {
+      s = s.split(`\u0000STASH${i}\u0000`).join(stashed[i]);
     }
+    return s;
+  }
 
-    let added = 0;
-    let removed = 0;
-    ops.forEach(function (o) {
-      if (o.type === "add") added++;
-      if (o.type === "rem") removed++;
-    });
+  function highlightDialogueOutsideTags(html) {
+    // Splits into HTML tags vs pure text nodes so HTML attributes are NEVER touched
+    return html.split(/(<[^>]+>)/g).map(part => {
+      if (part.startsWith('<')) return part;
+      return part.replace(/(“[^”]+”|&quot;[^&]+?&quot;)/g, '<span class="dialogue-span">$1</span>');
+    }).join('');
+  }
 
-    if (added === 0 && removed === 0) {
+  /* =========================================================
+     BLOCK-LEVEL MARKDOWN RENDERER
+     ========================================================= */
+  function renderMarkdown(markdown, options) {
+    const opts = Object.assign({
+      mode: 'preview',
+      showLineNumbers: true,
+      wrapLines: false,
+      collapsedSet: new Set(),
+      sceneBreakStyle: '✦  ✦  ✦',
+      highlightDialogue: false,
+      codeBlocksMeta: []
+    }, options || {});
+
+    if (!markdown || !markdown.trim()) {
       return {
-        html: '<div class="empty-state"><h3>Teks Sudah Bersih!</h3><p>Tidak ada perubahan antara teks input dan hasil perbaikan saat ini.</p></div>',
-        added: 0,
-        removed: 0
+        html: `<div class="empty-state"><h3>Belum ada output</h3><p>Tempel hasil Google AI Studio, drag &amp; drop file, atau pilih <strong>Sample</strong> untuk langsung melihat keajaiban Auto-Heal.</p></div>`,
+        headings: []
       };
     }
 
-    const visibleIndices = new Set();
-    if (changesOnly) {
-      for (let i = 0; i < ops.length; i++) {
-        if (ops[i].type !== "eq") {
-          for (let k = Math.max(0, i - 2); k <= Math.min(ops.length - 1, i + 2); k++) {
-            visibleIndices.add(k);
-          }
+    // Step 1: Isolate fenced code blocks line-by-line (CommonMark nested fence safe)
+    const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+    const tokens = [];
+    const extractedBlocks = [];
+    let inFence = null;
+    let blockIdx = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!inFence) {
+        const openMatch = line.match(/^(\s*)(`{3,}|~{3,})(.*)$/);
+        if (openMatch && !(openMatch[2][0] === '`' && openMatch[3].includes('`'))) {
+          inFence = {
+            char: openMatch[2][0],
+            len: openMatch[2].length,
+            lang: (openMatch[3].trim().split(/\s+/)[0] || 'text').toLowerCase(),
+            lines: []
+          };
+          continue;
+        }
+        tokens.push(line);
+      } else {
+        const closeRe = new RegExp(`^\\s*${inFence.char}{${inFence.len},}\\s*$`);
+        if (closeRe.test(line)) {
+          const metaFromParser = opts.codeBlocksMeta[blockIdx];
+          const codeStr = inFence.lines.join('\n');
+          const blockObj = metaFromParser || {
+            index: blockIdx,
+            lang: inFence.lang || 'text',
+            filename: '',
+            code: codeStr,
+            lines: codeStr === '' ? 0 : inFence.lines.length,
+            bytes: new Blob([codeStr]).size,
+            autoClosed: false
+          };
+          extractedBlocks.push(blockObj);
+          tokens.push(`@@RENDER_CODE_${blockIdx}@@`);
+          blockIdx++;
+          inFence = null;
+        } else {
+          inFence.lines.push(line);
         }
       }
     }
+    if (inFence) {
+      const metaFromParser = opts.codeBlocksMeta[blockIdx];
+      const codeStr = inFence.lines.join('\n');
+      extractedBlocks.push(metaFromParser || {
+        index: blockIdx,
+        lang: inFence.lang || 'text',
+        filename: '',
+        code: codeStr,
+        lines: inFence.lines.length,
+        bytes: new Blob([codeStr]).size,
+        autoClosed: true
+      });
+      tokens.push(`@@RENDER_CODE_${blockIdx}@@`);
+    }
 
-    const parts = [];
-    let skipped = 0;
+    // Step 2: Block-level walk
+    const htmlParts = [];
+    const headings = [];
+    const slugCounts = {};
+    let idx = 0;
 
-    for (let i = 0; i < ops.length; i++) {
-      if (changesOnly && !visibleIndices.has(i)) {
-        skipped++;
+    while (idx < tokens.length) {
+      const line = tokens[idx];
+      const trimmed = line.trim();
+
+      // Blank line
+      if (!trimmed) {
+        idx++;
         continue;
       }
+
+      // Code Block placeholder
+      const cbMatch = trimmed.match(/^@@RENDER_CODE_(\d+)@@$/);
+      if (cbMatch) {
+        const b = extractedBlocks[Number(cbMatch[1])];
+        if (b) {
+          htmlParts.push(renderCodeCard(b, {
+            showLineNumbers: opts.showLineNumbers,
+            wrapLines: opts.wrapLines,
+            collapsed: opts.collapsedSet && opts.collapsedSet.has(b.index)
+          }));
+        }
+        idx++;
+        continue;
+      }
+
+      // Display Math Block $$...$$ (single-line or multi-line)
+      if (trimmed.startsWith('$$')) {
+        if (trimmed.length > 4 && trimmed.endsWith('$$')) {
+          htmlParts.push(renderMath(trimmed.slice(2, -2), true));
+          idx++;
+          continue;
+        }
+        const mathLines = [trimmed.slice(2)];
+        idx++;
+        while (idx < tokens.length && !tokens[idx].trim().endsWith('$$')) {
+          mathLines.push(tokens[idx]);
+          idx++;
+        }
+        if (idx < tokens.length) {
+          mathLines.push(tokens[idx].trim().slice(0, -2));
+          idx++;
+        }
+        htmlParts.push(renderMath(mathLines.join('\n'), true));
+        continue;
+      }
+
+      // Headings H1-H6
+      const hMatch = line.match(/^(#{1,6})\s+(.+?)\s*#*$/);
+      if (hMatch) {
+        const level = hMatch[1].length;
+        const rawText = hMatch[2];
+        const plainTitle = rawText.replace(/[*_`~]/g, '').trim();
+        const baseSlug = plainTitle.toLowerCase().replace(/[^a-z0-9\u00C0-\u024F]+/g, '-').replace(/^-|-$/g, '') || 'section';
+        slugCounts[baseSlug] = (slugCounts[baseSlug] || 0) + 1;
+        const id = slugCounts[baseSlug] === 1 ? `h-${baseSlug}` : `h-${baseSlug}-${slugCounts[baseSlug]}`;
+        if (level <= 4) headings.push({ level, text: plainTitle, id });
+        htmlParts.push(`<h${level} id="${id}">${renderInline(rawText, opts)}</h${level}>`);
+        idx++;
+        continue;
+      }
+
+      // Scene Break / Horizontal Rule
+      if (/^(\*{3,}|-{3,}|_{3,}|(\*\s+){2,}\*|✦\s*✦\s*✦)$/.test(trimmed)) {
+        if (opts.mode === 'book') {
+          htmlParts.push(`<div class="scene-break" aria-hidden="true">${escapeHtml(opts.sceneBreakStyle)}</div>`);
+        } else {
+          htmlParts.push('<hr>');
+        }
+        idx++;
+        continue;
+      }
+
+      // Blockquote & GitHub/Obsidian Admonitions/Callouts (> [!NOTE], > [!TIP], etc.)
+      if (/^>\s?/.test(trimmed)) {
+        const bqLines = [];
+        while (idx < tokens.length && /^>\s?/.test(tokens[idx].trim())) {
+          bqLines.push(tokens[idx].trim().replace(/^>\s?/, ''));
+          idx++;
+        }
+        const calloutMatch = bqLines[0].match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$/i);
+        if (calloutMatch) {
+          const cType = calloutMatch[1].toLowerCase();
+          const cLabel = calloutMatch[2] || calloutMatch[1].toUpperCase();
+          const bodyLines = bqLines.slice(1).join('\n');
+          const innerHtml = bodyLines.trim()
+            ? bodyLines.split(/\n\s*\n/).map(p => `<p>${renderInline(p.replace(/\n/g, '<br>'), opts)}</p>`).join('')
+            : '';
+          htmlParts.push(`<div class="callout callout-${cType}"><div class="callout-title">${escapeHtml(cLabel)}</div>${innerHtml}</div>`);
+        } else {
+          const innerHtml = bqLines.join('\n').split(/\n\s*\n/).map(p =>
+            `<p>${p.split('\n').map(l => renderInline(l, opts)).join('<br>')}</p>`
+          ).join('');
+          htmlParts.push(`<blockquote>${innerHtml}</blockquote>`);
+        }
+        continue;
+      }
+
+      // GFM Pipe Table
+      if (isTableStart(tokens, idx)) {
+        const headerCells = splitPipeRow(tokens[idx]);
+        const sepCells = splitPipeRow(tokens[idx + 1]);
+        const alignments = sepCells.map(c => {
+          const t = c.trim();
+          if (t.startsWith(':') && t.endsWith(':')) return 'center';
+          if (t.endsWith(':')) return 'right';
+          return 'left';
+        });
+        idx += 2;
+        const bodyRows = [];
+        while (idx < tokens.length && tokens[idx].includes('|') && tokens[idx].trim() && !tokens[idx].trim().startsWith('@@RENDER_CODE_')) {
+          bodyRows.push(splitPipeRow(tokens[idx]));
+          idx++;
+        }
+        const thHtml = headerCells.map((cell, ci) =>
+          `<th style="text-align:${alignments[ci] || 'left'}">${renderInline(cell.trim(), opts)}</th>`
+        ).join('');
+        const tbHtml = bodyRows.map(row => {
+          const tds = headerCells.map((_, ci) =>
+            `<td style="text-align:${alignments[ci] || 'left'}">${renderInline((row[ci] || '').trim(), opts)}</td>`
+          ).join('');
+          return `<tr>${tds}</tr>`;
+        }).join('');
+        htmlParts.push(`<div class="table-wrap"><table><thead><tr>${thHtml}</tr></thead><tbody>${tbHtml}</tbody></table></div>`);
+        continue;
+      }
+
+      // Lists (Unordered, Ordered & Task Checkboxes)
+      if (/^\s*(?:[-*+]\s+|\d+\.\s+)/.test(line)) {
+        const listRes = parseListBlock(tokens, idx, opts);
+        htmlParts.push(listRes.html);
+        idx = listRes.nextIdx;
+        continue;
+      }
+
+      // Paragraph (stops cleanly at block triggers)
+      const paraLines = [];
+      while (
+        idx < tokens.length &&
+        tokens[idx].trim() !== '' &&
+        !/^@@RENDER_CODE_\d+@@$/.test(tokens[idx].trim()) &&
+        !/^#{1,6}\s+/.test(tokens[idx]) &&
+        !/^>\s?/.test(tokens[idx].trim()) &&
+        !/^\$\$/.test(tokens[idx].trim()) &&
+        !/^(\*{3,}|-{3,}|_{3,}|(\*\s+){2,}\*)$/.test(tokens[idx].trim()) &&
+        !/^\s*(?:[-*+]\s+|\d+\.\s+)/.test(tokens[idx]) &&
+        !isTableStart(tokens, idx)
+      ) {
+        paraLines.push(tokens[idx]);
+        idx++;
+      }
+      if (paraLines.length) {
+        const content = paraLines.map(l => renderInline(l, opts)).join('<br>');
+        htmlParts.push(`<p>${content}</p>`);
+      }
+    }
+
+    return {
+      html: htmlParts.join('\n'),
+      headings
+    };
+  }
+
+  function isTableStart(lines, idx) {
+    if (idx + 1 >= lines.length) return false;
+    const row1 = lines[idx].trim();
+    const row2 = lines[idx + 1].trim();
+    if (!row1.includes('|') || !row2.includes('|')) return false;
+    const sepCells = splitPipeRow(row2);
+    return sepCells.length >= 2 && sepCells.every(c => /^:?-+:?$/.test(c.trim()));
+  }
+
+  function splitPipeRow(line) {
+    let t = line.trim();
+    if (t.startsWith('|')) t = t.slice(1);
+    if (t.endsWith('|')) t = t.slice(0, -1);
+    return t.split('|');
+  }
+
+  function parseListBlock(lines, startIdx, opts) {
+    const isOrdered = /^\s*\d+\.\s+/.test(lines[startIdx]);
+    const tag = isOrdered ? 'ol' : 'ul';
+    const items = [];
+    let i = startIdx;
+
+    while (i < lines.length) {
+      const l = lines[i];
+      const match = isOrdered ? l.match(/^\s*\d+\.\s+(.*)$/) : l.match(/^\s*[-*+]\s+(.*)$/);
+      if (!match) break;
+
+      let content = match[1];
+      const taskMatch = !isOrdered && content.match(/^\[( |x|X)\]\s+(.*)$/);
+      if (taskMatch) {
+        const checked = taskMatch[1].toLowerCase() === 'x' ? 'checked' : '';
+        items.push(`<li class="task-item"><input type="checkbox" ${checked} disabled><span>${renderInline(taskMatch[2], opts)}</span></li>`);
+      } else {
+        items.push(`<li>${renderInline(content, opts)}</li>`);
+      }
+      i++;
+    }
+
+    return { html: `<${tag}>${items.join('')}</${tag}>`, nextIdx: i };
+  }
+
+  /* =========================================================
+     DIFF RENDERER
+     ========================================================= */
+  function renderDiff(diffResult, onlyChanges) {
+    if (!diffResult || !diffResult.lines.length) {
+      return '<div class="empty-state"><p>Tidak ada teks untuk dibandingkan.</p></div>';
+    }
+    if (diffResult.added === 0 && diffResult.removed === 0) {
+      return '<div class="empty-state"><h3>Teks Sudah Bersih!</h3><p>Tidak ada perbedaan antara teks Input dan hasil Output dengan aturan aktif saat ini.</p></div>';
+    }
+
+    const lines = diffResult.lines;
+    const out = [];
+    let skipped = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      const item = lines[i];
+      if (onlyChanges && item.type === 'eq') {
+        // Keep 1 line of surrounding context around changes
+        const prevChanged = i > 0 && lines[i - 1].type !== 'eq';
+        const nextChanged = i + 1 < lines.length && lines[i + 1].type !== 'eq';
+        if (!prevChanged && !nextChanged) {
+          skipped++;
+          continue;
+        }
+      }
+
       if (skipped > 0) {
-        parts.push('<div class="diff-line diff-sep">&bull;&bull;&bull; ' + skipped + " baris sama disembunyikan &bull;&bull;&bull;</div>");
+        out.push(`<div class="diff-sep">... ${skipped} baris sama disembunyikan ...</div>`);
         skipped = 0;
       }
-      const op = ops[i];
-      const cls = op.type === "add" ? "diff-add" : (op.type === "rem" ? "diff-rem" : "diff-eq");
-      const sign = op.type === "add" ? "+" : (op.type === "rem" ? "-" : " ");
-      const ln = op.newLine || op.oldLine || "";
-      parts.push(
-        '<div class="diff-line ' + cls + '">' +
-          '<span class="diff-ln">' + ln + "</span>" +
-          '<span class="diff-sign">' + sign + "</span>" +
-          '<span class="diff-text">' + (escapeHtml(op.text) || "&nbsp;") + "</span>" +
-        "</div>"
+
+      const cls = item.type === 'add' ? 'diff-add' : item.type === 'rem' ? 'diff-rem' : 'diff-eq';
+      const sign = item.type === 'add' ? '+' : item.type === 'rem' ? '−' : ' ';
+      const ln = item.newLine || item.oldLine || '';
+      out.push(
+        `<div class="diff-line ${cls}"><span class="diff-lnum">${ln}</span><span class="diff-sign">${sign}</span><span>${escapeHtml(item.text || ' ')}</span></div>`
       );
     }
 
     if (skipped > 0) {
-      parts.push('<div class="diff-line diff-sep">&bull;&bull;&bull; ' + skipped + " baris sama disembunyikan &bull;&bull;&bull;</div>");
+      out.push(`<div class="diff-sep">... ${skipped} baris sama disembunyikan ...</div>`);
     }
 
-    return { html: parts.join(""), added: added, removed: removed };
+    return out.join('');
   }
 
-  /* ---------------------------------------------------------
-     7. Combined Web Sandbox Builder (HTML + CSS + JS)
-     --------------------------------------------------------- */
-  function buildCombinedWebHtml(codeBlocks, singleBlock) {
-    if (singleBlock) {
-      if (singleBlock.lang === "svg") {
-        return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f8fafc;}</style></head><body>' + singleBlock.code + "</body></html>";
-      }
-      return singleBlock.code;
-    }
+  /* =========================================================
+     STANDALONE OFFLINE BOOK HTML EXPORTER / POPOUT BUILDER
+     ========================================================= */
+  function buildStandaloneHtml(title, fixedMarkdown, defaultTheme, codeBlocksMeta) {
+    const rendered = renderMarkdown(fixedMarkdown, {
+      mode: 'book',
+      showLineNumbers: true,
+      wrapLines: false,
+      sceneBreakStyle: '✦  ✦  ✦',
+      codeBlocksMeta: codeBlocksMeta || []
+    });
 
-    const htmlBlocks = codeBlocks.filter(function (b) { return b.lang === "html"; });
-    const cssBlocks = codeBlocks.filter(function (b) { return b.lang === "css"; });
-    const jsBlocks = codeBlocks.filter(function (b) { return b.lang === "javascript"; });
+    const safeTitle = escapeHtml(title || 'AI Studio Fixed Document');
+    const tocHtml = rendered.headings.length
+      ? `<nav class="toc"><strong>Daftar Isi</strong><ul>${rendered.headings.map(h => `<li class="l${h.level}"><a href="#${h.id}">${escapeHtml(h.text)}</a></li>`).join('')}</ul></nav>`
+      : '';
 
-    const cssTag = cssBlocks.length ? "<style>\n" + cssBlocks.map(function (b) { return b.code; }).join("\n\n") + "\n</style>" : "";
-    const jsTag = jsBlocks.length ? "<script>\n" + jsBlocks.map(function (b) { return b.code; }).join("\n\n") + "\n</" + "script>" : "";
-
-    let baseHtml = htmlBlocks.length ? htmlBlocks[0].code : "<!DOCTYPE html><html><head><meta charset='utf-8'></head><body><div id='app'></div></body></html>";
-
-    if (cssTag) {
-      baseHtml = /<\/head>/i.test(baseHtml)
-        ? baseHtml.replace(/<\/head>/i, cssTag + "\n</head>")
-        : cssTag + "\n" + baseHtml;
-    }
-    if (jsTag) {
-      baseHtml = /<\/body>/i.test(baseHtml)
-        ? baseHtml.replace(/<\/body>/i, jsTag + "\n</body>")
-        : baseHtml + "\n" + jsTag;
-    }
-    return baseHtml;
+    return `<!DOCTYPE html>
+<html lang="id" data-theme="${escapeHtml(defaultTheme || 'sepia')}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${safeTitle}</title>
+<style>
+  :root { --outer:#e4dac5; --page:#f7f1e3; --fg:#2c221a; --muted:#7a6652; --border:#d5c6a8; --accent:#9a5523; --code:#ede3cf; --syn-kw:#8a2be2; --syn-str:#166534; --syn-com:#78716c; --syn-num:#b45309; --syn-fn:#9a5523; --syn-type:#0f766e; --syn-tag:#9d174d; --syn-attr:#c2410c; }
+  html[data-theme="light"] { --outer:#eef2f8; --page:#ffffff; --fg:#0f172a; --muted:#64748b; --border:#d5dfec; --accent:#2563eb; --code:#f5f8fc; --syn-kw:#9333ea; --syn-str:#059669; --syn-com:#64748b; --syn-num:#d97706; --syn-fn:#2563eb; --syn-type:#0284c7; --syn-tag:#db2777; --syn-attr:#ea580c; }
+  html[data-theme="dark"] { --outer:#090d16; --page:#121826; --fg:#e6edf7; --muted:#8b9bb4; --border:#263147; --accent:#60a5fa; --code:#0a0f1a; --syn-kw:#c084fc; --syn-str:#34d399; --syn-com:#64748b; --syn-num:#fbbf24; --syn-fn:#60a5fa; --syn-type:#38bdf8; --syn-tag:#f472b6; --syn-attr:#fb923c; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--outer); color: var(--fg); font-family: Georgia, "Palatino Linotype", serif; line-height: 1.85; padding: 20px 14px 64px; }
+  .bar { max-width: 780px; margin: 0 auto 14px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-family: system-ui, sans-serif; font-size: 13px; }
+  .bar button { background: var(--page); color: var(--fg); border: 1px solid var(--border); padding: 6px 12px; border-radius: 7px; cursor: pointer; font-weight: 600; }
+  .page { max-width: 780px; margin: 0 auto; background: var(--page); border: 1px solid var(--border); border-radius: 10px; padding: 38px 36px 52px; box-shadow: 0 12px 32px rgba(0,0,0,.12); font-size: 18px; }
+  .toc { font-family: system-ui, sans-serif; font-size: 13.5px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 24px; }
+  .toc ul { list-style: none; padding: 0; margin: 8px 0 0; }
+  .toc li { margin: 4px 0; }
+  .toc li.l2 { padding-left: 14px; }
+  .toc li.l3 { padding-left: 28px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  h1,h2,h3 { line-height: 1.3; margin: 1.4em 0 0.55em; }
+  h1 { border-bottom: 1px solid var(--border); padding-bottom: 0.3em; text-align: center; }
+  p { margin: 0 0 1.1em; }
+  blockquote, .callout { border-left: 4px solid var(--accent); padding: 10px 15px; margin: 1em 0; background: rgba(128,128,128,0.07); border-radius: 0 8px 8px 0; }
+  .scene-break { text-align: center; margin: 2em 0; color: var(--muted); letter-spacing: 0.25em; }
+  code.inline-code { font-family: ui-monospace, monospace; font-size: 0.85em; background: var(--code); padding: 2px 6px; border-radius: 5px; border: 1px solid var(--border); }
+  .code-card { border: 1px solid var(--border); border-radius: 9px; overflow: hidden; margin: 1.1em 0; background: var(--code); font-family: ui-monospace, monospace; font-size: 13.5px; line-height: 1.55; }
+  .code-card-header { padding: 7px 12px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-family: system-ui, sans-serif; font-size: 12px; }
+  .code-card-actions, .code-collapse-btn { display: none; }
+  .code-body { overflow-x: auto; }
+  .code-lines-table { width: 100%; border-collapse: collapse; }
+  .code-ln-cell { padding: 0 10px; color: var(--muted); border-right: 1px solid var(--border); user-select: none; text-align: right; width: 1%; }
+  .code-src-cell { padding: 0 12px; white-space: pre; }
+  .table-wrap { overflow-x: auto; margin: 1em 0; }
+  table:not(.code-lines-table) { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+  table:not(.code-lines-table) th, table:not(.code-lines-table) td { border: 1px solid var(--border); padding: 8px 11px; }
+  .math-block { text-align: center; padding: 12px; border: 1px solid var(--border); border-radius: 8px; margin: 1em 0; }
+  .math-frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; font-size: 0.85em; }
+  .math-frac-num { border-bottom: 1px solid currentColor; padding: 0 3px; }
+  .syn-kw{color:var(--syn-kw);font-weight:600}.syn-str{color:var(--syn-str)}.syn-com{color:var(--syn-com);font-style:italic}.syn-num{color:var(--syn-num)}.syn-fn{color:var(--syn-fn)}.syn-type{color:var(--syn-type)}.syn-tag{color:var(--syn-tag)}.syn-attr{color:var(--syn-attr)}
+  @media (max-width:640px){ .page { padding: 22px 16px 36px; font-size: 16.5px; } }
+  @media print { .bar { display: none; } body { background: #fff; padding: 0; } .page { border: none; box-shadow: none; max-width: 100%; } }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <strong>${safeTitle}</strong>
+    <div>
+      <button onclick="document.documentElement.setAttribute('data-theme','sepia')">Sepia</button>
+      <button onclick="document.documentElement.setAttribute('data-theme','light')">Light</button>
+      <button onclick="document.documentElement.setAttribute('data-theme','dark')">Dark</button>
+      <button onclick="window.print()">Print / PDF</button>
+    </div>
+  </div>
+  <main class="page">
+    ${tocHtml}
+    ${rendered.html}
+  </main>
+</body>
+</html>`;
   }
 
-  /* ---------------------------------------------------------
-     8. Standalone Interactive Offline Book HTML Exporter
-     --------------------------------------------------------- */
-  function generateStandaloneBookHtml(title, bodyHtml, headings, defaultTheme) {
-    const safeTitle = escapeHtml(title || "AI Studio Fixed Document");
-    const themeVal = defaultTheme || "sepia";
-    const tocItems = (headings || []).map(function (h) {
-      return '<a href="#' + escapeHtml(h.id) + '" class="toc-l' + Math.min(3, h.level) + '">' + escapeHtml(h.title) + "</a>";
-    }).join("");
-
-    return '<!DOCTYPE html>\n<html lang="id" data-theme="' + escapeHtml(themeVal) + '">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width,initial-scale=1.0">\n<title>' + safeTitle + '</title>\n<style>\n' +
-      ':root{--bg:#e4dac5;--page:#f7f1e3;--fg:#2f2419;--muted:#786552;--border:#d5c7ab;--accent:#9a5523;--code:#ece3d1;}\n' +
-      'html[data-theme="light"]{--bg:#eff3f9;--page:#ffffff;--fg:#0f172a;--muted:#64748b;--border:#d5dfec;--accent:#2563eb;--code:#f1f5f9;}\n' +
-      'html[data-theme="dark"]{--bg:#090d16;--page:#121926;--fg:#e2e8f0;--muted:#94a3b8;--border:#25324a;--accent:#60a5fa;--code:#0b101b;}\n' +
-      '*{box-sizing:border-box;}body{margin:0;background:var(--bg);color:var(--fg);font-family:Georgia,serif;line-height:1.85;font-size:18px;}\n' +
-      '.bar{position:sticky;top:0;z-index:10;background:var(--page);border-bottom:1px solid var(--border);padding:10px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:system-ui,sans-serif;font-size:13px;}\n' +
-      '.bar button{border:1px solid var(--border);background:transparent;color:var(--fg);padding:5px 10px;border-radius:6px;cursor:pointer;}\n' +
-      '.wrap{max-width:74ch;margin:24px auto 64px;background:var(--page);border:1px solid var(--border);border-radius:10px;padding:38px 34px;box-shadow:0 12px 32px rgba(0,0,0,0.12);}\n' +
-      'h1,h2,h3{line-height:1.3;margin-top:1.3em;}h1{border-bottom:1px solid var(--border);padding-bottom:8px;text-align:center;}\n' +
-      'pre{background:var(--code);padding:14px;border-radius:8px;overflow-x:auto;font-family:monospace;font-size:13.5px;border:1px solid var(--border);}\n' +
-      'code.inline-code{background:var(--code);padding:2px 5px;border-radius:4px;font-family:monospace;font-size:0.86em;}\n' +
-      'table{width:100%;border-collapse:collapse;margin:1em 0;font-size:0.9em;}th,td{border:1px solid var(--border);padding:8px 10px;}\n' +
-      'blockquote{border-left:4px solid var(--accent);margin:1em 0;padding:8px 14px;background:rgba(128,128,128,0.08);}\n' +
-      '.scene-break{text-align:center;margin:1.8em 0;letter-spacing:0.35em;color:var(--muted);}\n' +
-      '.code-card-actions,.code-collapse-btn{display:none!important;}\n' +
-      '.toc{margin-bottom:24px;padding:12px 16px;border:1px solid var(--border);border-radius:8px;font-family:system-ui,sans-serif;font-size:13.5px;}\n' +
-      '.toc a{display:block;color:var(--accent);text-decoration:none;padding:3px 0;}.toc a.toc-l2{padding-left:14px;}.toc a.toc-l3{padding-left:28px;}\n' +
-      '@media(max-width:640px){.wrap{margin:10px;padding:22px 16px;}}\n' +
-      '</style>\n</head>\n<body>\n' +
-      '<div class="bar"><strong>' + safeTitle + '</strong><div>' +
-      '<button onclick="setFs(-2)">A-</button> <button onclick="setFs(2)">A+</button> ' +
-      '<button onclick="cycleTheme()">Tema</button>' +
-      '</div></div>\n' +
-      '<main class="wrap">' +
-      (tocItems ? '<details class="toc"><summary style="cursor:pointer;font-weight:700;">Daftar Isi</summary>' + tocItems + "</details>" : "") +
-      bodyHtml +
-      '</main>\n<script>\n' +
-      'var fs=18,themes=["sepia","light","dark"],ti=Math.max(0,themes.indexOf(document.documentElement.dataset.theme));\n' +
-      'function setFs(d){fs=Math.min(28,Math.max(13,fs+d));document.body.style.fontSize=fs+"px";}\n' +
-      'function cycleTheme(){ti=(ti+1)%themes.length;document.documentElement.dataset.theme=themes[ti];}\n' +
-      '</' + 'script>\n</body>\n</html>';
-  }
-
-  global.FixerRenderer = {
-    escapeHtml: escapeHtml,
-    formatBytes: formatBytes,
-    highlightLine: highlightLine,
-    buildCodeCardHtml: buildCodeCardHtml,
-    renderMath: renderMath,
-    renderMarkdown: renderMarkdown,
-    enhanceBookArticleDom: enhanceBookArticleDom,
-    renderDiffHtml: renderDiffHtml,
-    buildCombinedWebHtml: buildCombinedWebHtml,
-    generateStandaloneBookHtml: generateStandaloneBookHtml
+  global.OutputRenderer = {
+    getLanguageMeta,
+    escapeHtml,
+    highlightCode: highlightLineOrCode,
+    renderCodeCard,
+    renderMath,
+    renderMarkdown,
+    renderDiff,
+    buildStandaloneHtml
   };
 })(window);

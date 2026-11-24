@@ -1,61 +1,82 @@
-# AI Studio Output Fixer & Book Reader (Masterpiece Edition)
+# Gemini Output Fixer & Book Reader — Studio Edition
 
-Aplikasi web **100% offline, zero-dependency, dan menjaga privasi penuh** untuk memperbaiki kerusakan format output dari **Google AI Studio / Gemini** (maupun LLM lain), mengeksplorasi kode layaknya IDE, serta membaca cerita/fanfiksi/artikel panjang layaknya e-reader buku profesional.
-
-Seluruh pemrosesan berjalan murni di browser (HTML, CSS, Vanilla JavaScript) — tanpa server, tanpa build step, dan tanpa data Anda keluar dari perangkat.
-
----
+Aplikasi web **100% offline, tanpa dependensi eksternal, dan berbasis vanilla HTML/CSS/JavaScript** untuk memperbaiki output Markdown, kode, tabel, rumus LaTeX, maupun cerita/fanfiksi dari Google AI Studio (atau LLM lainnya) yang terpotong atau berantakan secara real-time, lengkap dengan **Code View** profesional dan **Book View** layar penuh.
 
 ## Fitur Utama
 
-### 1. Bulletproof Auto-Heal Engine (Code-Safe & Writing-Safe)
-Menggunakan arsitektur **Tokenized Isolation Pipeline** (memisahkan *fenced code blocks* berbasis CommonMark *line-by-line state machine*, *inline code*, *LaTeX math*, dan *URL* sebelum aturan prosa dijalankan), sehingga **format coding maupun format penulisan novel tidak akan pernah saling merusak**:
-- **Perbaikan Code Fence**: Menutup otomatis blok ```` ``` ```` yang terpotong di akhir respons, memisahkan *fence* yang menempel pada baris kode, mendukung *nested fence* (````` ````markdown ````` berisi ```` ``` ````), serta **Auto-Deteksi Bahasa** (JS, TS, Python, HTML, SVG, CSS, JSON, SQL, Bash, Go, Rust, Java, C++, YAML, dll.).
-- **JSON String Unescape Aman**: Mendeteksi & mengubah string `\n` literal dari raw API JSON payload secara otomatis tanpa merusak kode sumber asli.
-- **Perbaikan Markdown & Tabel**: Memperbaiki *heading* tanpa spasi (`##Bab 1` -> `## Bab 1`) tanpa menyentuh `#hashtag` atau `#include`, merapikan bold/italic patah (`** teks **`, `****bold****`, `**Label:**Teks`), memperbaiki *bullet* Unicode (`•`), list rapat (`1.Item`), hingga merekonstruksi baris pemisah tabel Markdown (`|---|---|`) yang hilang.
-- **Preset Cepat**: Pilih mode **Auto (Balanced)**, **Coding (Strict)**, **Novel (Book/Fanfic)**, atau **Minimal**, atau atur tiap aturan secara individual di menu **Rules**.
-- **Deteksi Terpotong + Smart Continuation Prompt + Smart Append (`+ Append`)**:
-  - Mendeteksi respons AI yang terhenti di tengah kode, kalimat, atau dialog.
-  - Membuatkan prompt lanjutan siap paste (Bahasa Indonesia / Inggris).
-  - Tombol **`+ Append`** menyambungkan balasan Part 2 dari clipboard ke Part 1 sambil **otomatis mendeteksi & menghapus baris tumpang-tindih (*overlap deduplication*)**.
+### 1. Mesin Auto-Heal Markdown & Perlindungan Format
+Dirancang agar format **coding** dan **tulisan/prosa** tidak pernah rusak saat diperbaiki:
+- **Perlindungan Code Fence Presisi**: Mendukung ```` ``` ```` maupun `~~~` dengan panjang fleksibel (termasuk *nested fence* seperti ```` ````markdown ```` yang membungkus blok kode di dalamnya), memisahkan fence yang menyatu dengan teks, dan menutup otomatis blok kode yang terpotong tanpa pernah mengubah isi/indentasi kode.
+- **Perbaikan Tabel Cerdas**: Menambahkan baris pemisah (`---`), meratakan jumlah kolom, mendukung `\|` (*escaped pipe*) serta pipe di dalam inline code, dan mempertahankan perataan kolom (`:---`, `:---:`, `---:`).
+- **Perbaikan Heading & List Aman**: Memperbaiki `#Judul`, `-Item`, dan `1.Item` sambil melindungi angka desimal (`3.14`), versi (`2.0.1`), bilangan negatif (`-5`), warna hex (`#1a2b3c`), dan teks miring (`*italic*`).
+- **Perlindungan Inline Formatting**: Menutup tag inline yang timpang (`` ` ``, `**`, `__`, `~~`, `*`) dengan melindungi inline code, rumus math, URL (underscore di URL tidak akan berubah menjadi *italic*), serta nama variabel `snake_case`.
+- **Sanitasi & Tipografi**: Menghapus karakter Unicode tak terlihat (`ZWSP`, `BOM`, `SHY`), memperbaiki *mojibake*, membersihkan entitas HTML nyasar (`&amp;`, `&quot;`, `&#39;`), memperbaiki spasi link rusak (`[teks] (url)`), merapikan paragraf dialog cerita, serta opsi *Smart Typography* (`“ ”`, `—`, `…`).
+- **3 Preset Aturan Cepat**: `Default`, `Coding`, dan `Novel/Book`, ditambah 10 sakelar aturan individual.
+- **LCS Line Diff Nyata**: Menampilkan perbandingan baris sebelum & sesudah menggunakan algoritma *Longest Common Subsequence* lengkap dengan nomor baris, ringkasan `+tambah / -hapus`, dan filter **Changes Only**.
 
-### 2. IDE-Grade Code View & Live Sandboxed Preview
-- **Tab Khusus `Code View`**: Menampilkan seluruh blok kode dengan *sidebar* daftar file (nama file otomatis terdeteksi dari komentar/label), filter berdasarkan bahasa, dan pencarian cepat.
-- **Single-Pass Syntax Highlighter**: Pewarnaan sintaks satu-lintasan (*token-safe*) yang tidak akan pernah mengkorupsi tag HTML/kode.
-- **Nomor Baris Interaktif**: Klik nomor baris (atau `Shift + Klik` untuk rentang) untuk menyorot baris penting saat meninjau kode.
-- **Code Focus Lightbox & Live HTML/SVG Preview**: Buka blok kode mana pun dalam layar penuh; khusus kode **HTML** atau **SVG**, tersedia mode **Split** & **Live Preview** yang berjalan aman di dalam `<iframe sandbox="allow-scripts">`.
-- **Ekspor Kode Cepat**: Unduh satu blok kode sesuai ekstensi aslinya (`.py`, `.js`, `.html`, `.sql`, dll.), *Copy All Code*, atau *Download Bundle*.
+### 2. Code View & Code Explorer
+- **Syntax Highlighter Sadar-Bahasa (Single-Pass)**: Mendukung JavaScript/TypeScript, Python, HTML/XML/SVG, CSS, JSON, SQL, Bash/Shell, Java, C/C++, Go, Rust, dan PHP tanpa merusak entitas HTML atau warna hex CSS.
+- **Toolbar Code View Lengkap**: Expand All / Collapse All, toggle Line Numbers, Word Wrap global, ukuran font kode independen (`A-` / `A+`), **5 Tema Syntax** (`Auto`, `GitHub Dark`, `Dracula`, `Monokai`, `Nord`), serta **Filter Bahasa** otomatis.
+- **Kartu Kode Interaktif**:
+  - **Sorot Baris (Line Highlight)**: Klik nomor baris untuk menandai baris penting (`Shift + Klik` untuk rentang baris).
+  - **Quick Find di Dalam Kartu**: Cari & sorot kata kunci langsung di dalam blok kode panjang.
+  - **Live Sandboxed Preview**: Render langsung blok kode `html` atau `svg` di jendela pratinjau aman (`iframe sandbox`).
+  - **Format & Validasi JSON**: Rapikan dan validasi blok `json` dengan satu klik.
+  - **Code Focus Fullscreen**: Perluas satu blok kode ke modal layar penuh.
+  - **Copy & Save Snippet**: Salin atau unduh potongan kode dengan ekstensi file otomatis (`.js`, `.py`, `.html`, `.json`, dll.), atau unduh seluruh blok kode sekaligus.
+- **Code Explorer & Code Diff**: Jelajahi semua blok kode, lompat langsung ke posisi blok di Preview, atau bandingkan dua blok kode berdampingan dengan **Compare Diff**.
 
-### 3. Masterpiece Book & Fanfiction Reader
-- **6 Tema Kertas & Malam**: *Sepia*, *Cream*, *Parchment Klasik*, *Sage Eye-Care*, *Dark Navy*, dan *AMOLED*.
-- **Tipografi Novel Lengkap**: 5 jenis font (termasuk *Classic Literary* & *High-Legibility / Dyslexia-Friendly*), ukuran font, spasi baris, lebar halaman, *Justify*, *Book Indentation*, *Drop Cap*, pilihan ornamen *Scene Break* (`✦ ✦ ✦`, `* * *`, `— ❦ —`, `❖`).
-- **Highlight Dialog & Focus Reading Mode**: Warnai kalimat dialog secara lembut agar nyaman dibaca cepat, atau aktifkan *Focus Mode* untuk meredupkan paragraf yang tidak sedang dibaca.
-- **Slide-out Chapter & Bookmark Drawer + Auto-Resume**: Lompat antar bab, simpan banyak bookmark, dan posisi baca terakhir diingat otomatis per dokumen.
-- **Distraction-Free & Fullscreen**: Ketuk area tengah layar (atau tekan `H`) untuk menyembunyikan seluruh menu, dan tekan `F` untuk *browser fullscreen*.
-- **Smooth Auto-Scroll**: Gulir otomatis super mulus berbasis `requestAnimationFrame` dengan 5 tingkat kecepatan.
-- **Audiobook TTS Anti-Terpotong**: Menggunakan *Web Speech API* yang memecah bacaan per paragraf (mengatasi bug Chrome berhenti setelah 15 detik), lengkap dengan *live highlight*, auto-scroll mengikuti suara, pilihan suara sistem, dan kontrol kecepatan (`0.8x` – `1.75x`).
+### 3. Book View (Full-Screen Book & Fanfiction Reader)
+- **5 Tema Baca**: Kertas Buku (*Sepia*), Putih Hangat (*Cream*), Hijau Lembut (*Sage*), Malam (*Midnight*), dan *AMOLED* Hitam Pekat.
+- **Tipografi Kaya**: 5 pilihan font (*Serif Novel*, *Classic Book*, *Modern Sans*, *Dyslexia Friendly*, *Monospace*), ukuran font (`13px–28px`), spasi baris (`1.5–2.3`), 4 lebar halaman, *Justify*, *Book Indent*, *Drop Cap*, serta slider **Redup (Eye-Care Dimmer)**.
+- **Bionic Reading & Reading Ruler**: Mode *Bionic Reading* menebalkan awal kata secara aman (melewati kode & rumus), dan *Reading Ruler* menampilkan garis fokus baca yang mengikuti kursor.
+- **Sidebar Daftar Isi & Bookmark**: Navigasi bab otomatis yang tersinkronisasi saat menggulir, plus simpan dan kelola posisi **Bookmark** bacaan.
+- **Pembaca Suara (TTS) Per-Paragraf**: Membacakan teks per paragraf dengan sorotan paragraf aktif, gulir otomatis, deteksi bahasa otomatis (`Auto` / `ID` / `EN`), dan pengatur kecepatan (`0.8x–1.8x`).
+- **Auto-Scroll & Mode Fokus**: Gulir otomatis dengan jeda cepat via tombol `Space`, serta klik area teks untuk menyembunyikan seluruh toolbar (*distraction-free*).
 
-### 4. Workspace Productivity & QoL
-- **Resizable Split-Pane** (geser pembatas panel di desktop, *double-click* untuk reset 50/50) + mode *Focus Input / Split / Focus Output*.
-- **Synchronized Scroll** opsional antara panel Input dan Output.
-- **Diff Viewer** (Mode *Full Diff* & *Hanya Perubahan* dengan statistik `+ditambah / -dihapus`).
-- **Find & Replace** mendukung *Regex*, *Case-Sensitive*, *Whole Word*, dan proteksi error regex.
-- **Undo / Redo**, **Auto-Save Draft**, serta **History Snapshots** dengan fitur *Pin*.
-- **Drag & Drop File** (`.md`, `.txt`, `.json`, `.js`, `.py`, `.html`, dll.).
-- **Ekspor Lengkap**: Download `.md`, `.txt`, **Standalone Book `.html`** (lengkap dengan switcher tema & TOC offline), `.json`, **Copy Rich Text** (siap paste ke Google Docs / Word / Notion), dan **Print / Save as PDF**.
-
----
+### 4. Quality of Life (QoL) & Produktivitas
+- **Resizable Split Pane & Preset Layout**: Geser pembatas tengah untuk mengatur lebar panel Input/Output (double-click untuk reset 50/50), atau pilih mode fokus `In` / `Split` / `Out`.
+- **Sync Scroll**: Sinkronkan posisi gulir antara panel Input dan Output.
+- **Find & Replace v2**: Mendukung Regex, Case Sensitive, navigasi kecocokan (`↑` / `↓`), ganti satu per satu, atau ganti semua.
+- **Smart Continuation Prompt v2**: Deteksi otomatis teks terpotong dengan generator prompt lanjutan khusus mode `Umum`, `Coding`, atau `Cerita/Fanfiksi`.
+- **History v2**: Pencarian riwayat, Pin/Unpin riwayat favorit, hapus per item, dan bersihkan riwayat non-pin.
+- **Ekspor Multi-Format**: Unduh `.md`, `.txt`, **Interactive Offline Book `.html`** (lengkap dengan syntax highlighting & tombol ganti tema), `.json`, atau **Print / Save as PDF**.
+- **Dukungan Markdown Kaya**: Nested list, task list (`- [x]`), GitHub-style Callouts (`> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`, `> [!IMPORTANT]`, `> [!CAUTION]`), gambar, dan rumus LaTeX.
 
 ## Struktur Proyek
 
-```text
-Gemini Output Fixer/
-├── index.html          # Struktur antarmuka, Code View, Book Reader & Modals
-├── css/
-│   └── style.css       # Desain responsif, 3 tema workspace, 6 tema Book Reader & print CSS
-├── js/
-│   ├── parser.js       # Tokenized Auto-Heal Engine, Diff, Smart Stitch & Truncation Detector
-│   ├── renderer.js     # XSS-safe Markdown, Single-Pass Syntax Highlighter, Math & HTML Exporter
-│   └── app.js          # Controller UI, IDE Code View, Book Reader, TTS & LocalStorage state
-├── LICENSE             # Lisensi MIT
-└── README.md           # Dokumentasi
+| File / Folder | Fungsi |
+| :--- | :--- |
+| `index.html` | Struktur antarmuka utama, panel editor/output, Code View, Book View, dan modal |
+| `css/style.css` | Desain tema (Dark, Book, Light), 5 tema kode, 5 tema buku, dan tata letak responsif |
+| `js/parser.js` | Mesin auto-heal Markdown, proteksi code fence, tabel, inline tag, dan LCS line diff |
+| `js/renderer.js` | Renderer Markdown ke HTML, syntax highlighter sadar-bahasa, LaTeX, Bionic Reading, dan kartu kode |
+| `js/app.js` | Manajemen state, event listener, Code Explorer, Book Reader, TTS, History, dan Export |
+| `LICENSE` | Lisensi MIT |
+
+## Cara Menjalankan
+
+Karena aplikasi ini **100% client-side dan offline**, Anda tidak perlu menginstal Node.js, bundler, atau dependensi apa pun:
+
+1. Ekstrak folder proyek atau klon repositori ke komputer Anda.
+2. Buka file `index.html` langsung di browser modern (Chrome, Edge, Firefox, atau Safari).
+3. Mulai paste output dari Google AI Studio, drag & drop file `.md`/`.txt`, atau pilih salah satu contoh dari menu **Sample**.
+
+## Pintasan Keyboard
+
+| Pintasan | Aksi |
+| :--- | :--- |
+| `Ctrl / Cmd + Shift + C` | Salin Fixed Markdown |
+| `Ctrl / Cmd + F` | Buka Find & Replace |
+| `Ctrl / Cmd + B` | Buka / Tutup Book View |
+| `Ctrl / Cmd + E` | Buka Code Explorer |
+| `Ctrl / Cmd + Z / Y` | Undo / Redo editor |
+| `←` / `→` | Bab Sebelumnya / Berikutnya (di Book View) |
+| `F` / `T` / `B` | Mode Fokus / Daftar Isi / Tambah Bookmark (di Book View) |
+| `Space` | Jeda / Lanjutkan Auto-Scroll (di Book View) |
+| `?` | Buka panduan pintasan keyboard |
+| `Esc` | Tutup modal, dropdown, atau keluar dari Book View |
+
+## Lisensi
+
+Proyek ini dirilis di bawah lisensi **MIT** — lihat file `LICENSE` untuk detail lengkapnya.

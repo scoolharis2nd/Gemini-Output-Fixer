@@ -8,23 +8,107 @@
     listsHeadings: true,
     math: true,
     inlineTags: true,
-    storyDialogue: false
+    htmlEntities: true,
+    brokenLinks: true,
+    storyDialogue: false,
+    smartTypography: false
   };
+
+  const RULE_PRESETS = {
+    default: {
+      sanitize: true,
+      codeBlocks: true,
+      tables: true,
+      listsHeadings: true,
+      math: true,
+      inlineTags: true,
+      htmlEntities: true,
+      brokenLinks: true,
+      storyDialogue: false,
+      smartTypography: false
+    },
+    coding: {
+      sanitize: true,
+      codeBlocks: true,
+      tables: true,
+      listsHeadings: true,
+      math: true,
+      inlineTags: true,
+      htmlEntities: false,
+      brokenLinks: true,
+      storyDialogue: false,
+      smartTypography: false
+    },
+    book: {
+      sanitize: true,
+      codeBlocks: true,
+      tables: true,
+      listsHeadings: true,
+      math: false,
+      inlineTags: true,
+      htmlEntities: true,
+      brokenLinks: true,
+      storyDialogue: true,
+      smartTypography: true
+    }
+  };
+
+  function splitUnescapedPipes(line) {
+    const cells = [];
+    let current = '';
+    let inBacktick = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '`') {
+        inBacktick = !inBacktick;
+        current += ch;
+      } else if (ch === '\\' && line[i + 1] === '|') {
+        current += '\\|';
+        i++;
+      } else if (ch === '|' && !inBacktick) {
+        cells.push(current);
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    cells.push(current);
+    return cells;
+  }
 
   function isTableLine(line) {
     const t = line.trim();
-    return Boolean(t && t.includes('|') && t.split('|').length >= 2);
+    if (!t || !t.includes('|')) return false;
+    const parts = splitUnescapedPipes(t);
+    if (parts.length < 2) return false;
+    // Avoid mistaking single-pipe prose unless framed by | or >= 2 pipes
+    if (parts.length === 2 && !t.startsWith('|') && !t.endsWith('|')) {
+      return false;
+    }
+    return true;
   }
 
   function parseTableCells(line) {
     let t = line.trim();
     if (t.startsWith('|')) t = t.slice(1);
-    if (t.endsWith('|')) t = t.slice(0, -1);
-    return t.split('|').map(c => c.trim());
+    if (t.endsWith('|') && !t.endsWith('\\|')) t = t.slice(0, -1);
+    return splitUnescapedPipes(t).map(c => c.trim());
   }
 
   function isSeparatorRow(cells) {
     return cells.length > 0 && cells.every(c => /^:?-{2,}:?$/.test(c.replace(/\s+/g, '')));
+  }
+
+  function parseTableAlignments(sepCells) {
+    return sepCells.map(c => {
+      const s = c.replace(/\s+/g, '');
+      const left = s.startsWith(':');
+      const right = s.endsWith(':');
+      if (left && right) return 'center';
+      if (right) return 'right';
+      if (left) return 'left';
+      return '';
+    });
   }
 
   function fixTableBlock(block, stats) {
@@ -51,11 +135,14 @@
       }
       if (idx === 1) {
         for (let c = 0; c < row.length; c++) {
-          if (!/^:?-{3,}:?$/.test(row[c])) {
-            const left = row[c].startsWith(':') ? ':' : '';
-            const right = row[c].endsWith(':') ? ':' : '';
+          const clean = row[c].replace(/\s+/g, '');
+          if (!/^:?-{3,}:?$/.test(clean)) {
+            const left = clean.startsWith(':') ? ':' : '';
+            const right = clean.endsWith(':') ? ':' : '';
             row[c] = left + '---' + right;
             modified = true;
+          } else {
+            row[c] = clean;
           }
         }
       }
@@ -92,17 +179,23 @@
     for (let i = 0; i < lines.length; i++) {
       let line = lines[i];
 
+      // Headings missing space: #Title -> # Title (skip hex colors like #fff or #1a2b3c and #1)
       const headMatch = line.match(/^(\s{0,3})(#{1,6})([^\s#].*)$/);
       if (headMatch) {
-        line = headMatch[1] + headMatch[2] + ' ' + headMatch[3];
-        stats.listsHeadings++;
-        orderedCounter = 0;
-        out.push(line);
-        continue;
+        const rest = headMatch[3];
+        const isHexOrTagNum = headMatch[2].length === 1 && (/^(?:fff|ffffff|(?=\S*\d)[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?(?:[0-9a-fA-F]{2})?)\b/i.test(rest) || /^\d+\b/.test(rest));
+        if (!isHexOrTagNum) {
+          line = headMatch[1] + headMatch[2] + ' ' + rest;
+          stats.listsHeadings++;
+          orderedCounter = 0;
+          out.push(line);
+          continue;
+        }
       }
 
-      const dashMatch = line.match(/^(\s*)-([^\s-].*)$/);
-      if (dashMatch) {
+      // Unordered dash list missing space: -Item -> - Item (skip negative numbers -5, flags --opt, hr ---)
+      const dashMatch = line.match(/^(\s*)-([^\s\d-].*)$/);
+      if (dashMatch && !/^\s*[-*_]{3,}\s*$/.test(line)) {
         line = dashMatch[1] + '- ' + dashMatch[2];
         stats.listsHeadings++;
         orderedCounter = 0;
@@ -110,15 +203,21 @@
         continue;
       }
 
+      // Unordered star list missing space: *Item -> * Item (only when no other * on line)
       const starMatch = line.match(/^(\s*)\*([^\s*].*)$/);
       if (starMatch && !starMatch[2].includes('*')) {
-        line = starMatch[1] + '* ' + starMatch[2];
-        stats.listsHeadings++;
-        orderedCounter = 0;
-        out.push(line);
-        continue;
+        const prevIsList = out.length > 0 && /^\s*[*+-]\s+/.test(out[out.length - 1]);
+        const nextIsList = i + 1 < lines.length && /^\s*\*([^\s*]|\s+)/.test(lines[i + 1]);
+        if (prevIsList || nextIsList || starMatch[2].length < 80) {
+          line = starMatch[1] + '* ' + starMatch[2];
+          stats.listsHeadings++;
+          orderedCounter = 0;
+          out.push(line);
+          continue;
+        }
       }
 
+      // Ordered list: 1.Item -> 1. Item (never touch decimals 3.14 or versions 2.0.1)
       const ordMatch = line.match(/^(\s*)(\d+)\.(\s*)(.*)$/);
       if (ordMatch) {
         const indent = ordMatch[1];
@@ -126,16 +225,25 @@
         const space = ordMatch[3];
         const rest = ordMatch[4];
 
-        if (!space && rest) stats.listsHeadings++;
-        if (indent.length === 0) {
-          orderedCounter++;
-          if (num !== orderedCounter) stats.listsHeadings++;
-          line = orderedCounter + '. ' + rest;
-        } else {
-          line = indent + num + '. ' + rest;
+        const looksLikeDecimalOrVersion = /^\d/.test(rest);
+        const looksLikeYear = num >= 1900 && num <= 2100 && orderedCounter === 0;
+
+        if (!looksLikeDecimalOrVersion && !looksLikeYear && rest.length > 0) {
+          if (!space) stats.listsHeadings++;
+          if (indent.length === 0) {
+            if (orderedCounter > 0 || num === 1) {
+              orderedCounter++;
+              if (num !== orderedCounter) stats.listsHeadings++;
+              line = orderedCounter + '. ' + rest;
+            } else {
+              line = num + '. ' + rest;
+            }
+          } else {
+            line = indent + num + '. ' + rest;
+          }
+          out.push(line);
+          continue;
         }
-        out.push(line);
-        continue;
       }
 
       if (line.trim() !== '') orderedCounter = 0;
@@ -152,8 +260,9 @@
       if (
         prev && prev.trim() !== '' &&
         cur.trim() !== '' &&
-        !/^(#{1,6}\s|>|\s*[-*+]\s+|\s*\d+\.\s+|\|)/.test(cur) &&
-        (/^[""'—]/.test(cur.trim()) || /[""]$/.test(prev.trim()))
+        !/^(#{1,6}\s|>|\s*[-*+]\s+|\s*\d+\.\s+|\||[-*_]{3,}\s*$)/.test(cur.trim()) &&
+        !/^(#{1,6}\s|>|\s*[-*+]\s+|\s*\d+\.\s+|\||[-*_]{3,}\s*$)/.test(prev.trim()) &&
+        (/^["“”'‘’—«]/.test(cur.trim()) || /["“”»]$/.test(prev.trim()))
       ) {
         out.push('');
         stats.sanitized++;
@@ -161,6 +270,72 @@
       out.push(cur);
     }
     return out;
+  }
+
+  function applySmartTypographyToLine(line, stats) {
+    const trimmed = line.trim();
+    if (!trimmed || /^\s*\|/.test(line) || /^\s*[-*_]{3,}\s*$/.test(line)) return line;
+
+    const holders = [];
+    const protect = (m) => {
+      const id = `\u0003T${holders.length}\u0003`;
+      holders.push(m);
+      return id;
+    };
+
+    let out = line
+      .replace(/`[^`]*`/g, protect)
+      .replace(/(\\\(.+?\\\)|\$[^$\n]+?\$)/g, protect)
+      .replace(/https?:\/\/[^\s)]+/g, protect);
+
+    const before = out;
+    // Ellipsis
+    out = out.replace(/\.{3}/g, '…');
+    // Em-dash (avoid touching list markers at start)
+    out = out.replace(/(\S)\s*--\s*(\S)/g, '$1 — $2');
+    // Curly double quotes
+    out = out.replace(/(^|[\s(\[{—])"(?=\S)/g, '$1“');
+    out = out.replace(/"/g, '”');
+
+    if (out !== before) stats.sanitized++;
+    out = out.replace(/\u0003T(\d+)\u0003/g, (_, idx) => holders[Number(idx)]);
+    return out;
+  }
+
+  function decodeProseEntities(line, stats) {
+    if (!/&(?:amp|lt|gt|quot|#39|nbsp);/.test(line)) return line;
+    const holders = [];
+    const protect = (m) => {
+      const id = `\u0004E${holders.length}\u0004`;
+      holders.push(m);
+      return id;
+    };
+    let out = line.replace(/`[^`]*`/g, protect);
+    const map = [
+      [/&amp;/g, '&'],
+      [/&quot;/g, '"'],
+      [/&#39;/g, "'"],
+      [/&nbsp;/g, ' ']
+    ];
+    for (const [re, rep] of map) {
+      const m = out.match(re);
+      if (m) {
+        stats.sanitized += m.length;
+        out = out.replace(re, rep);
+      }
+    }
+    out = out.replace(/\u0004E(\d+)\u0004/g, (_, idx) => holders[Number(idx)]);
+    return out;
+  }
+
+  function repairBrokenLinks(line, stats) {
+    const re = /\[([^\]]+)\]\s+\((https?:\/\/[^\s)]+)\)/g;
+    const matches = line.match(re);
+    if (matches) {
+      stats.inlineTags += matches.length;
+      return line.replace(re, '[$1]($2)');
+    }
+    return line;
   }
 
   function repairMath(text, stats) {
@@ -202,19 +377,26 @@
       return line;
     }
 
-    // Protect inline math \(...\) and $...$ before counting * or _
-    const mathHolders = [];
-    let out = line.replace(/(\\\(.+?\\\)|\$[^$\n]+?\$)/g, m => {
-      const id = `\u0002M${mathHolders.length}\u0002`;
-      mathHolders.push(m);
-      return id;
-    });
-
-    const backticks = out.match(/`/g);
-    if (backticks && backticks.length % 2 === 1) {
+    // Step 1: Close odd backticks first (ignoring escaped backticks)
+    let out = line;
+    const rawBackticks = out.match(/(?<!\\)`/g);
+    if (rawBackticks && rawBackticks.length % 2 === 1) {
       out += '`';
       stats.inlineTags++;
     }
+
+    // Step 2: Protect inline code, inline math, and URLs before counting *, **, __, ~~
+    const holders = [];
+    const protect = (m) => {
+      const id = `\u0002P${holders.length}\u0002`;
+      holders.push(m);
+      return id;
+    };
+
+    out = out
+      .replace(/`[^`]*`/g, protect)
+      .replace(/(\\\(.+?\\\)|\$[^$\n]+?\$)/g, protect)
+      .replace(/https?:\/\/[^\s)]+/g, protect);
 
     const boldStars = out.match(/\*\*/g);
     if (boldStars && boldStars.length % 2 === 1) {
@@ -222,23 +404,29 @@
       stats.inlineTags++;
     }
 
-    const boldUnder = out.match(/__/g);
+    // Ignore snake_case double underscores like __init__? Only count __ not surrounded by word chars on both sides
+    const boldUnder = out.match(/(?<![a-zA-Z0-9])__|__(?![a-zA-Z0-9])/g);
     if (boldUnder && boldUnder.length % 2 === 1) {
       out += '__';
       stats.inlineTags++;
     }
 
+    const strikes = out.match(/~~/g);
+    if (strikes && strikes.length % 2 === 1) {
+      out += '~~';
+      stats.inlineTags++;
+    }
+
     const withoutBoldAndList = out
       .replace(/^\s*\*\s+/, '')
-      .replace(/\*\*/g, '')
-      .replace(/`[^`]*`/g, '');
+      .replace(/\*\*/g, '');
     const singleStars = withoutBoldAndList.match(/\*/g);
     if (singleStars && singleStars.length % 2 === 1) {
       out += '*';
       stats.inlineTags++;
     }
 
-    out = out.replace(/\u0002M(\d+)\u0002/g, (_, idx) => mathHolders[Number(idx)]);
+    out = out.replace(/\u0002P(\d+)\u0002/g, (_, idx) => holders[Number(idx)]);
     return out;
   }
 
@@ -260,6 +448,7 @@
 
     let text = raw.replace(/\r\n?/g, '\n');
 
+    // Step A: Sanitize invisible unicode & mojibake (safe globally)
     if (rules.sanitize) {
       const invisibleMatches = text.match(/[\u200B-\u200D\uFEFF\u2060\u00AD]/g);
       if (invisibleMatches) {
@@ -285,40 +474,75 @@
         stats.sanitized += strayMoji.length;
         text = text.replace(/â€[\u0080-\u009F]?/g, '"');
       }
-
-      const extraNewlines = text.match(/\n{4,}/g);
-      if (extraNewlines) {
-        stats.sanitized += extraNewlines.length;
-        text = text.replace(/\n{4,}/g, '\n\n\n');
-      }
     }
 
-    let lines = text.split('\n');
+    // Step B: Parse & repair code fences with exact char & length matching
+    const rawLines = text.split('\n');
     let inCode = false;
-    let fenceChar = '```';
+    let openFenceChar = '`';
+    let openFenceLen = 3;
+    let openFenceLang = '';
     const repairedLines = [];
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    for (let i = 0; i < rawLines.length; i++) {
+      const line = rawLines[i];
       const trimmed = line.trim();
-      const fenceMatch = trimmed.match(/^(```+|~~~+)(.*)$/);
+
+      // Fix fused fence at end of prose line outside code block, e.g. "Berikut kodenya:```python"
+      if (!inCode && rules.codeBlocks) {
+        const fused = line.match(/^(.+?[^\s`~])(```+|~~~+)([a-zA-Z0-9_+-]*)\s*$/);
+        if (fused && !line.includes('`', 0)) {
+          repairedLines.push(fused[1]);
+          repairedLines.push(fused[2] + fused[3]);
+          inCode = true;
+          openFenceChar = fused[2][0];
+          openFenceLen = fused[2].length;
+          openFenceLang = fused[3].toLowerCase();
+          stats.codeBlocks++;
+          continue;
+        }
+      }
+
+      const fenceMatch = trimmed.match(/^(`{3,}|~{3,})(.*)$/);
 
       if (fenceMatch) {
-        const ticks = fenceMatch[1].slice(0, 3);
-        const lang = fenceMatch[2].trim();
+        const marker = fenceMatch[1];
+        const ch = marker[0];
+        const len = marker.length;
+        const info = fenceMatch[2].trim();
 
         if (!inCode) {
           inCode = true;
-          fenceChar = ticks;
+          openFenceChar = ch;
+          openFenceLen = len;
+          openFenceLang = info.split(/\s+/)[0].toLowerCase();
           repairedLines.push(line);
-        } else if (rules.codeBlocks && lang && /^[a-zA-Z0-9_+-]+$/.test(lang)) {
-          repairedLines.push(fenceChar);
-          stats.codeBlocks++;
-          repairedLines.push(line);
-          fenceChar = ticks;
         } else {
-          inCode = false;
-          repairedLines.push(line);
+          const isMatchingClose = ch === openFenceChar && len >= openFenceLen && info === '';
+          const isMarkdownHost = openFenceLang === 'md' || openFenceLang === 'markdown';
+
+          if (isMatchingClose) {
+            inCode = false;
+            repairedLines.push(line);
+          } else if (
+            rules.codeBlocks &&
+            !isMarkdownHost &&
+            openFenceLen === 3 &&
+            ch === openFenceChar &&
+            info &&
+            /^[a-zA-Z][a-zA-Z0-9_+-]*$/.test(info)
+          ) {
+            // Unclosed previous block followed directly by a new ```lang block
+            repairedLines.push(openFenceChar.repeat(openFenceLen));
+            stats.codeBlocks++;
+            repairedLines.push(line);
+            openFenceChar = ch;
+            openFenceLen = len;
+            openFenceLang = info.toLowerCase();
+          } else {
+            // Treat as literal line inside code block (preserves nested fences!)
+            repairedLines.push(line);
+          }
         }
       } else {
         repairedLines.push(line);
@@ -326,47 +550,90 @@
     }
 
     if (inCode && rules.codeBlocks) {
-      repairedLines.push(fenceChar);
+      repairedLines.push(openFenceChar.repeat(openFenceLen));
       stats.codeBlocks++;
       stats.truncated = true;
     }
 
-    lines = repairedLines;
+    // Step C: Split into protected code segments vs text segments
     const segments = [];
     let buf = [];
     let inside = false;
+    let segChar = '`';
+    let segLen = 3;
     const extractedCode = [];
 
-    for (let i = 0; i < lines.length; i++) {
-      const trimmed = lines[i].trim();
-      if (/^(```+|~~~+)/.test(trimmed)) {
-        if (!inside) {
-          if (buf.length) segments.push({ type: 'text', lines: buf });
-          buf = [lines[i]];
-          inside = true;
-        } else {
-          buf.push(lines[i]);
-          segments.push({ type: 'code', lines: buf });
-          const lang = (buf[0].trim().match(/^(?:```+|~~~+)(.*)$/) || ['', 'code'])[1].trim() || 'code';
-          extractedCode.push({ lang, code: buf.slice(1, -1).join('\n') });
-          buf = [];
-          inside = false;
-        }
+    for (let i = 0; i < repairedLines.length; i++) {
+      const line = repairedLines[i];
+      const trimmed = line.trim();
+      const fm = trimmed.match(/^(`{3,}|~{3,})(.*)$/);
+
+      if (!inside && fm) {
+        if (buf.length) segments.push({ type: 'text', lines: buf });
+        buf = [line];
+        inside = true;
+        segChar = fm[1][0];
+        segLen = fm[1].length;
+      } else if (inside && fm && fm[1][0] === segChar && fm[1].length >= segLen && fm[2].trim() === '') {
+        buf.push(line);
+        segments.push({ type: 'code', lines: buf });
+        const openMatch = buf[0].trim().match(/^(?:`{3,}|~{3,})(.*)$/);
+        const lang = (openMatch && openMatch[1] ? openMatch[1].trim().split(/\s+/)[0] : '') || 'code';
+        const codeStr = buf.slice(1, -1).join('\n');
+        extractedCode.push({
+          lang,
+          code: codeStr,
+          lines: codeStr === '' ? 0 : codeStr.split('\n').length,
+          chars: codeStr.length
+        });
+        buf = [];
+        inside = false;
       } else {
-        buf.push(lines[i]);
+        buf.push(line);
       }
     }
     if (buf.length) {
       segments.push({ type: inside ? 'code' : 'text', lines: buf });
+      if (inside) {
+        const openMatch = buf[0].trim().match(/^(?:`{3,}|~{3,})(.*)$/);
+        const lang = (openMatch && openMatch[1] ? openMatch[1].trim().split(/\s+/)[0] : '') || 'code';
+        const codeStr = buf.slice(1).join('\n');
+        extractedCode.push({
+          lang,
+          code: codeStr,
+          lines: codeStr === '' ? 0 : codeStr.split('\n').length,
+          chars: codeStr.length
+        });
+      }
     }
 
+    // Step D: Apply prose-only repairs (NEVER touch code segments!)
     const headings = [];
     for (const seg of segments) {
       if (seg.type !== 'text') continue;
 
+      if (rules.sanitize) {
+        let joined = seg.lines.join('\n');
+        const extraNewlines = joined.match(/\n{4,}/g);
+        if (extraNewlines) {
+          stats.sanitized += extraNewlines.length;
+          joined = joined.replace(/\n{4,}/g, '\n\n\n');
+        }
+        seg.lines = joined.split('\n');
+      }
+
+      if (rules.htmlEntities) {
+        seg.lines = seg.lines.map(l => decodeProseEntities(l, stats));
+      }
+      if (rules.brokenLinks) {
+        seg.lines = seg.lines.map(l => repairBrokenLinks(l, stats));
+      }
       if (rules.tables) seg.lines = repairTables(seg.lines, stats);
       if (rules.listsHeadings) seg.lines = repairListsAndHeadings(seg.lines, stats);
       if (rules.storyDialogue) seg.lines = formatStoryParagraphs(seg.lines, stats);
+      if (rules.smartTypography) {
+        seg.lines = seg.lines.map(l => applySmartTypographyToLine(l, stats));
+      }
 
       let segText = seg.lines.join('\n');
       if (rules.math) segText = repairMath(segText, stats);
@@ -383,13 +650,20 @@
       });
     }
 
-    const finalFixed = segments.map(s => s.lines.join('\n')).join('\n').trim();
+    // Preserve code indentation: only strip leading/trailing blank lines
+    const finalFixed = segments.map(s => s.lines.join('\n')).join('\n').replace(/^\n+|\n+$/g, '');
 
     if (!stats.truncated) {
       const trimmedRaw = text.trim();
       if (trimmedRaw.length > 25) {
-        const lastChar = trimmedRaw.slice(-1);
-        if (!/[.!?…"'`)\]}|:\n]/.test(lastChar) && !/^#{1,6}\s/.test(trimmedRaw.split('\n').pop())) {
+        const lastLine = trimmedRaw.split('\n').pop().trim();
+        const lastChar = lastLine.slice(-1);
+        if (
+          lastChar &&
+          !/[.!?…"'”’`)\]}|:\n]/.test(lastChar) &&
+          !/^#{1,6}\s/.test(lastLine) &&
+          !/^[-*_]{3,}$/.test(lastLine)
+        ) {
           stats.truncated = true;
         }
       }
@@ -398,29 +672,100 @@
     return { fixed: finalFixed, stats, codeBlocks: extractedCode, headings };
   }
 
+  // Real LCS Line Diff with common prefix/suffix trimming
   function computeLineDiff(beforeText, afterText) {
     const a = beforeText.replace(/\r\n?/g, '\n').split('\n');
     const b = afterText.replace(/\r\n?/g, '\n').split('\n');
+
+    let start = 0;
+    while (start < a.length && start < b.length && a[start] === b[start]) start++;
+
+    let endA = a.length - 1;
+    let endB = b.length - 1;
+    while (endA >= start && endB >= start && a[endA] === b[endB]) {
+      endA--;
+      endB--;
+    }
+
     const diff = [];
-    const maxLen = Math.max(a.length, b.length);
-    for (let i = 0; i < maxLen; i++) {
-      const la = a[i];
-      const lb = b[i];
-      if (la === lb) {
-        diff.push({ type: 'eq', text: lb });
-      } else {
-        if (la !== undefined) diff.push({ type: 'rem', text: la });
-        if (lb !== undefined) diff.push({ type: 'add', text: lb });
+    for (let i = 0; i < start; i++) {
+      diff.push({ type: 'eq', text: a[i], oldLine: i + 1, newLine: i + 1 });
+    }
+
+    const midA = a.slice(start, endA + 1);
+    const midB = b.slice(start, endB + 1);
+    const m = midA.length;
+    const n = midB.length;
+
+    if (m === 0 && n === 0) {
+      // identical
+    } else if (m * n <= 1200000) {
+      // Standard DP LCS table
+      const dp = new Array(m + 1);
+      for (let i = 0; i <= m; i++) dp[i] = new Int32Array(n + 1);
+      for (let i = m - 1; i >= 0; i--) {
+        for (let j = n - 1; j >= 0; j--) {
+          if (midA[i] === midB[j]) {
+            dp[i][j] = dp[i + 1][j + 1] + 1;
+          } else {
+            dp[i][j] = dp[i + 1][j] >= dp[i][j + 1] ? dp[i + 1][j] : dp[i][j + 1];
+          }
+        }
+      }
+
+      let i = 0;
+      let j = 0;
+      while (i < m && j < n) {
+        if (midA[i] === midB[j]) {
+          diff.push({ type: 'eq', text: midA[i], oldLine: start + i + 1, newLine: start + j + 1 });
+          i++;
+          j++;
+        } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+          diff.push({ type: 'rem', text: midA[i], oldLine: start + i + 1, newLine: null });
+          i++;
+        } else {
+          diff.push({ type: 'add', text: midB[j], oldLine: null, newLine: start + j + 1 });
+          j++;
+        }
+      }
+      while (i < m) {
+        diff.push({ type: 'rem', text: midA[i], oldLine: start + i + 1, newLine: null });
+        i++;
+      }
+      while (j < n) {
+        diff.push({ type: 'add', text: midB[j], oldLine: null, newLine: start + j + 1 });
+        j++;
+      }
+    } else {
+      // Fast fallback for huge inputs
+      const maxLen = Math.max(m, n);
+      for (let k = 0; k < maxLen; k++) {
+        if (k < m && k < n && midA[k] === midB[k]) {
+          diff.push({ type: 'eq', text: midA[k], oldLine: start + k + 1, newLine: start + k + 1 });
+        } else {
+          if (k < m) diff.push({ type: 'rem', text: midA[k], oldLine: start + k + 1, newLine: null });
+          if (k < n) diff.push({ type: 'add', text: midB[k], oldLine: null, newLine: start + k + 1 });
+        }
       }
     }
+
+    const tailLen = a.length - 1 - endA;
+    for (let t = 0; t < tailLen; t++) {
+      const idxA = endA + 1 + t;
+      const idxB = endB + 1 + t;
+      diff.push({ type: 'eq', text: a[idxA], oldLine: idxA + 1, newLine: idxB + 1 });
+    }
+
     return diff;
   }
 
   global.FixerParser = {
     DEFAULT_RULES,
+    RULE_PRESETS,
     isTableLine,
     parseTableCells,
     isSeparatorRow,
+    parseTableAlignments,
     autoHealMarkdown,
     computeLineDiff
   };
